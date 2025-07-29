@@ -1,0 +1,28 @@
+{
+  "request_id": "req_2024_001234",
+  "provider_id": "prov_12345",
+  "patient_demographics": {
+    "patient_id": "enc_pat_1a2b3c4d5e6f7g8h",
+    "age": 45,
+    "gender": "female",
+    "insurance_id": "enc_ins_9z8y7x6w5v4u3t2s",
+    "member_id": "enc_mem_a1b2c3d4e5f6g7h8"
+  },
+  "diagnosis_codes": [
+    {
+      "code": "M25.511",
+      "description": "Pain in right shoulder",
+      "category": "musculoskeletal"
+    }
+  ],
+  "procedure_codes": [
+    {
+      "code": "73221",
+      "description": "MRI upper extremity without contrast",
+      "category": "radiology"
+    }
+  ],
+  "clinical_notes": "Patient presents with chronic right shoulder pain lasting 6 months. Conservative treatment with physical therapy has failed. MRI needed to evaluate for rotator cuff tear.",
+  "procedure_type": "mri",
+  "urgency_level": "routine"
+}

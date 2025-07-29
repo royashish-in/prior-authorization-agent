@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prior-auth-config
+  namespace: prior-auth
+data:
+  LOG_LEVEL: "INFO"
+  PYTHONUNBUFFERED: "1"
+  PYTHONDONTWRITEBYTECODE: "1"
+  DATABASE_HOST: "postgres-service"
+  DATABASE_PORT: "5432"
+  DATABASE_NAME: "prior_auth"
+  REDIS_HOST: "redis-service"
+  REDIS_PORT: "6379"
+  API_PORT: "8000"
+  CORS_ORIGINS: "https://your-domain.com"
+  RATE_LIMIT_REQUESTS: "1000"
+  RATE_LIMIT_WINDOW: "3600"

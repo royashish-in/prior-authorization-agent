@@ -1,0 +1,462 @@
+name: Production Deployment Pipeline
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  schedule:
+    # Run maintenance checks daily at 6 AM UTC
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+    inputs:
+      deployment_type:
+        description: 'Type of deployment'
+        required: true
+        default: 'standard'
+        type: choice
+        options:
+        - standard
+        - hotfix
+        - rollback
+        - maintenance
+      target_environment:
+        description: 'Target environment'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+        - staging
+        - production
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: prior-auth-api
+  CLUSTER_NAME: prior-auth-cluster
+
+jobs:
+  pre-deployment-checks:
+    runs-on: ubuntu-latest
+    outputs:
+      should-deploy: ${{ steps.check.outputs.should-deploy }}
+      deployment-type: ${{ steps.check.outputs.deployment-type }}
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Determine deployment strategy
+      id: check
+      run: |
+        if [[ "${{ github.event_name }}" == "schedule" ]]; then
+          echo "should-deploy=false" >> $GITHUB_OUTPUT
+          echo "deployment-type=maintenance" >> $GITHUB_OUTPUT
+        elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+          echo "should-deploy=true" >> $GITHUB_OUTPUT
+          echo "deployment-type=release" >> $GITHUB_OUTPUT
+        elif [[ "${{ github.event.inputs.deployment_type }}" == "rollback" ]]; then
+          echo "should-deploy=false" >> $GITHUB_OUTPUT
+          echo "deployment-type=rollback" >> $GITHUB_OUTPUT
+        else
+          echo "should-deploy=true" >> $GITHUB_OUTPUT
+          echo "deployment-type=standard" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Security scan
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+
+    - name: Upload security scan results
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+  test-suite:
+    needs: pre-deployment-checks
+    if: needs.pre-deployment-checks.outputs.should-deploy == 'true'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest pytest-cov pytest-asyncio
+
+    - name: Run unit tests
+      env:
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+        REDIS_URL: redis://localhost:6379
+      run: |
+        python -m pytest tests/ -v --cov=src --cov-report=xml --cov-fail-under=90
+
+    - name: Run integration tests
+      env:
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+        REDIS_URL: redis://localhost:6379
+      run: |
+        python -m pytest tests/test_*_integration.py -v
+
+    - name: Run security tests
+      run: |
+        python -m pytest tests/test_security*.py -v
+
+    - name: Upload test results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: test-results
+        path: |
+          coverage.xml
+          pytest-report.xml
+
+  build-and-push:
+    needs: [pre-deployment-checks, test-suite]
+    if: needs.pre-deployment-checks.outputs.should-deploy == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      image-uri: ${{ steps.build.outputs.image-uri }}
+      image-digest: ${{ steps.build.outputs.image-digest }}
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+
+    - name: Build and push Docker image
+      id: build
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        IMAGE_TAG: ${{ github.sha }}
+      run: |
+        # Build image with security hardening
+        docker build \
+          --build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ') \
+          --build-arg VCS_REF=${{ github.sha }} \
+          --build-arg VERSION=${{ github.ref_name }} \
+          -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+          -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
+        
+        # Push images
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+        
+        # Get image digest for security
+        IMAGE_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG)
+        
+        echo "image-uri=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+        echo "image-digest=$IMAGE_DIGEST" >> $GITHUB_OUTPUT
+
+    - name: Scan Docker image
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ${{ steps.build.outputs.image-uri }}
+        format: 'sarif'
+        output: 'image-scan-results.sarif'
+
+    - name: Upload image scan results
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: 'image-scan-results.sarif'
+
+  deploy-staging:
+    needs: [pre-deployment-checks, build-and-push]
+    if: needs.pre-deployment-checks.outputs.should-deploy == 'true'
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Update kubeconfig
+      run: |
+        aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.CLUSTER_NAME }}-staging
+
+    - name: Deploy to staging
+      env:
+        IMAGE_URI: ${{ needs.build-and-push.outputs.image-uri }}
+        NAMESPACE: prior-auth-staging
+      run: |
+        # Update deployment manifest
+        sed -i "s|image: prior-auth-api:latest|image: $IMAGE_URI|g" deployment/k8s/app-deployment.yaml
+        sed -i "s|namespace: prior-auth|namespace: $NAMESPACE|g" deployment/k8s/*.yaml
+        
+        # Apply manifests
+        kubectl apply -f deployment/k8s/namespace.yaml
+        kubectl apply -f deployment/k8s/secrets.yaml
+        kubectl apply -f deployment/k8s/configmap.yaml
+        kubectl apply -f deployment/k8s/postgres-deployment.yaml
+        kubectl apply -f deployment/k8s/redis-deployment.yaml
+        kubectl apply -f deployment/k8s/app-deployment.yaml
+        
+        # Wait for deployment
+        kubectl rollout status deployment/prior-auth-api -n $NAMESPACE --timeout=600s
+
+    - name: Run smoke tests
+      env:
+        NAMESPACE: prior-auth-staging
+      run: |
+        # Port forward for testing
+        kubectl port-forward service/prior-auth-api-service 8080:80 -n $NAMESPACE &
+        PF_PID=$!
+        sleep 10
+        
+        # Run smoke tests
+        curl -f http://localhost:8080/health
+        curl -f http://localhost:8080/docs
+        
+        # Cleanup
+        kill $PF_PID
+
+  deploy-production:
+    needs: [pre-deployment-checks, build-and-push, deploy-staging]
+    if: |
+      needs.pre-deployment-checks.outputs.should-deploy == 'true' && 
+      (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Update kubeconfig
+      run: |
+        aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.CLUSTER_NAME }}
+
+    - name: Pre-deployment backup
+      run: |
+        chmod +x scripts/backup.sh
+        ./scripts/backup.sh full
+
+    - name: Deploy to production
+      env:
+        IMAGE_URI: ${{ needs.build-and-push.outputs.image-uri }}
+        NAMESPACE: prior-auth
+      run: |
+        # Update deployment manifest
+        sed -i "s|image: prior-auth-api:latest|image: $IMAGE_URI|g" deployment/k8s/app-deployment.yaml
+        
+        # Apply manifests with rolling update
+        kubectl apply -f deployment/k8s/secrets.yaml
+        kubectl apply -f deployment/k8s/configmap.yaml
+        kubectl apply -f deployment/k8s/app-deployment.yaml
+        
+        # Wait for deployment with timeout
+        kubectl rollout status deployment/prior-auth-api -n $NAMESPACE --timeout=900s
+
+    - name: Run database migrations
+      env:
+        NAMESPACE: prior-auth
+      run: |
+        POD_NAME=$(kubectl get pods -n $NAMESPACE -l app=prior-auth-api -o jsonpath='{.items[0].metadata.name}')
+        kubectl exec -n $NAMESPACE $POD_NAME -- python -m alembic upgrade head
+
+    - name: Production health check
+      env:
+        NAMESPACE: prior-auth
+      run: |
+        # Wait for pods to be fully ready
+        kubectl wait --for=condition=ready pod -l app=prior-auth-api -n $NAMESPACE --timeout=300s
+        
+        # Port forward for testing
+        kubectl port-forward service/prior-auth-api-service 8080:80 -n $NAMESPACE &
+        PF_PID=$!
+        sleep 15
+        
+        # Comprehensive health checks
+        curl -f http://localhost:8080/health
+        curl -f http://localhost:8080/metrics
+        
+        # Test authentication endpoint
+        curl -f -X POST http://localhost:8080/api/v1/auth/token \
+          -H "Content-Type: application/json" \
+          -d '{"username":"test","password":"test"}' || echo "Auth test skipped"
+        
+        # Cleanup
+        kill $PF_PID
+
+    - name: Update deployment status
+      if: success()
+      run: |
+        echo "Production deployment successful at $(date)"
+        echo "Image: ${{ needs.build-and-push.outputs.image-uri }}"
+        echo "Commit: ${{ github.sha }}"
+
+  rollback:
+    needs: pre-deployment-checks
+    if: |
+      needs.pre-deployment-checks.outputs.deployment-type == 'rollback' ||
+      github.event.inputs.deployment_type == 'rollback'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Update kubeconfig
+      run: |
+        aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.CLUSTER_NAME }}
+
+    - name: Execute rollback
+      run: |
+        chmod +x scripts/rollback.sh
+        ./scripts/rollback.sh previous
+
+    - name: Verify rollback
+      run: |
+        kubectl rollout status deployment/prior-auth-api -n prior-auth --timeout=600s
+        
+        # Health check after rollback
+        kubectl port-forward service/prior-auth-api-service 8080:80 -n prior-auth &
+        PF_PID=$!
+        sleep 10
+        curl -f http://localhost:8080/health
+        kill $PF_PID
+
+  maintenance:
+    needs: pre-deployment-checks
+    if: |
+      needs.pre-deployment-checks.outputs.deployment-type == 'maintenance' ||
+      github.event.inputs.deployment_type == 'maintenance'
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Update kubeconfig
+      run: |
+        aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.CLUSTER_NAME }}
+
+    - name: Run maintenance tasks
+      run: |
+        chmod +x scripts/maintenance.sh
+        chmod +x scripts/backup.sh
+        
+        # Run full maintenance
+        ./scripts/maintenance.sh full
+        
+        # Run backup
+        ./scripts/backup.sh full
+
+    - name: Upload maintenance report
+      env:
+        UPLOAD_REPORT: true
+      run: |
+        REPORT_FILE=$(./scripts/maintenance.sh report)
+        echo "Maintenance report generated: $REPORT_FILE"
+
+  post-deployment:
+    needs: [deploy-production]
+    if: always() && needs.deploy-production.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+    - name: Notify deployment success
+      run: |
+        echo "Production deployment completed successfully!"
+        echo "Timestamp: $(date)"
+        echo "Commit: ${{ github.sha }}"
+        echo "Image: ${{ needs.build-and-push.outputs.image-uri }}"
+        
+        # Add notification logic here (Slack, email, etc.)
+
+    - name: Update monitoring dashboards
+      run: |
+        echo "Updating monitoring dashboards with new deployment info"
+        # Add logic to update Grafana annotations or similar
+
+  failure-handling:
+    needs: [deploy-production]
+    if: always() && needs.deploy-production.result == 'failure'
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Update kubeconfig
+      run: |
+        aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.CLUSTER_NAME }}
+
+    - name: Emergency rollback
+      run: |
+        chmod +x scripts/rollback.sh
+        ./scripts/rollback.sh emergency
+
+    - name: Notify deployment failure
+      run: |
+        echo "Production deployment failed and emergency rollback initiated"
+        echo "Timestamp: $(date)"
+        echo "Commit: ${{ github.sha }}"
+        
+        # Add critical notification logic here

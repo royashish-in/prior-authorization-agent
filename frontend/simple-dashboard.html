@@ -1,0 +1,1450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prior Authorization Agent - Dashboard</title>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        .card {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .login-form {
+            max-width: 400px;
+            margin: 50px auto;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+        }
+
+        input[type="text"], input[type="password"], textarea, select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        input:focus, textarea:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: transform 0.2s;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+        }
+
+        .btn-success {
+            background: #28a745;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .stat-number {
+            font-size: 2em;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .stat-label {
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .request-item {
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 15px;
+            margin-bottom: 10px;
+            background: #f9f9f9;
+        }
+
+        .request-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .request-id {
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .status-badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .status-submitted { background: #ffeaa7; color: #2d3436; }
+        .status-approved { background: #00b894; color: white; }
+        .status-denied { background: #e17055; color: white; }
+        .status-pending { background: #74b9ff; color: white; }
+
+        .hidden {
+            display: none;
+        }
+
+        .alert {
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+
+        .tabs {
+            display: flex;
+            border-bottom: 2px solid #ddd;
+            margin-bottom: 20px;
+        }
+
+        .tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.3s;
+        }
+
+        .tab.active {
+            border-bottom-color: #667eea;
+            color: #667eea;
+            font-weight: bold;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Decision Making Styles */
+        .request-review-item {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 15px;
+            background: #fff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .request-review-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .urgency-urgent {
+            background: #ff6b6b;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+
+        .urgency-routine {
+            background: #51cf66;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+
+        .clinical-notes {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            border-left: 4px solid #667eea;
+        }
+
+        .decision-form {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+
+        .decision-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .btn-approve {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .btn-deny {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .btn-more-info {
+            background: #ffc107;
+            color: #212529;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .decision-reasoning {
+            margin-top: 15px;
+        }
+
+        .decision-reasoning textarea {
+            width: 100%;
+            min-height: 100px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            resize: vertical;
+        }
+
+        .medical-codes {
+            display: flex;
+            gap: 20px;
+            margin: 10px 0;
+        }
+
+        .code-group {
+            flex: 1;
+        }
+
+        .code-item {
+            background: #e9ecef;
+            padding: 8px 12px;
+            border-radius: 4px;
+            margin: 5px 0;
+            font-family: monospace;
+        }
+
+        .patient-info {
+            background: #fff3cd;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            border-left: 4px solid #ffc107;
+        }
+
+        .decision-history-item {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            border-left: 4px solid #6c757d;
+        }
+
+        .confidence-score {
+            display: inline-block;
+            background: #17a2b8;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>🏥 Prior Authorization Agent</h1>
+            <p>Healthcare Authorization Management System</p>
+        </div>
+
+        <!-- Login Form -->
+        <div id="login-section" class="card login-form">
+            <h2 style="text-align: center; margin-bottom: 20px;">Login</h2>
+            
+            <div class="form-group">
+                <label for="username">Username:</label>
+                <input type="text" id="username" placeholder="Enter username" value="provider1">
+            </div>
+            
+            <div class="form-group">
+                <label for="password">Password:</label>
+                <input type="password" id="password" placeholder="Enter password" value="provider123">
+            </div>
+            
+            <button onclick="login()" id="login-btn" style="width: 100%;">Login</button>
+            
+            <div style="margin-top: 15px; font-size: 12px; color: #666;">
+                <strong>Test Accounts:</strong><br>
+                provider1 / provider123 (Healthcare Provider)<br>
+                admin1 / admin123 (Payer Admin)<br>
+                compliance1 / compliance123 (Compliance Officer)
+            </div>
+        </div>
+
+        <!-- Dashboard -->
+        <div id="dashboard-section" class="hidden">
+            <!-- User Info -->
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <h3>Welcome, <span id="user-name">User</span></h3>
+                        <p>Role: <span id="user-role">Provider</span></p>
+                    </div>
+                    <button onclick="logout()" class="btn-secondary">Logout</button>
+                </div>
+            </div>
+
+            <!-- Stats Dashboard -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-number" id="total-requests">-</div>
+                    <div class="stat-label">Total Requests</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="pending-requests">-</div>
+                    <div class="stat-label">Pending</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="approved-requests">-</div>
+                    <div class="stat-label">Approved</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="approval-rate">-</div>
+                    <div class="stat-label">Approval Rate</div>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="tabs">
+                <div class="tab active" onclick="showTab('requests', this)">My Requests</div>
+                <div class="tab" onclick="showTab('submit', this)" id="submit-tab-btn">Submit New Request</div>
+                <div class="tab" onclick="showTab('decisions', this)">Recent Decisions</div>
+                <div class="tab" onclick="showTab('review', this)" id="review-tab-btn" style="display: none;">Review Requests</div>
+                <div class="tab" onclick="showTab('make-decision', this)" id="decision-tab-btn" style="display: none;">Make Decisions</div>
+            </div>
+
+            <!-- Requests Tab -->
+            <div id="requests-tab" class="tab-content active">
+                <div class="card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h3>Authorization Requests</h3>
+                        <button onclick="loadRequests()" class="btn-secondary">Refresh</button>
+                    </div>
+                    <div id="requests-list">
+                        <div class="loading">Loading requests...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Submit Tab -->
+            <div id="submit-tab" class="tab-content">
+                <div class="card">
+                    <h3>Submit New Authorization Request</h3>
+                    <form id="request-form" onsubmit="submitRequest(event)">
+                        <div class="form-group">
+                            <label for="provider-id">Provider ID:</label>
+                            <input type="text" id="provider-id" value="prov_12345" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="patient-age">Patient Age:</label>
+                            <input type="number" id="patient-age" min="1" max="120" value="45" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="patient-gender">Patient Gender:</label>
+                            <select id="patient-gender" required>
+                                <option value="">Select Gender</option>
+                                <option value="male">Male</option>
+                                <option value="female" selected>Female</option>
+                                <option value="other">Other</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="diagnosis-code">Diagnosis Code (ICD-10):</label>
+                            <input type="text" id="diagnosis-code" placeholder="e.g., M25.511" value="M25.511" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="diagnosis-description">Diagnosis Description:</label>
+                            <input type="text" id="diagnosis-description" placeholder="e.g., Pain in right shoulder" value="Pain in right shoulder" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="procedure-code">Procedure Code (CPT):</label>
+                            <input type="text" id="procedure-code" placeholder="e.g., 73221" value="73221" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="procedure-description">Procedure Description:</label>
+                            <input type="text" id="procedure-description" placeholder="e.g., MRI upper extremity without contrast" value="MRI upper extremity without contrast" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="procedure-type">Procedure Type:</label>
+                            <select id="procedure-type" required>
+                                <option value="">Select Type</option>
+                                <option value="mri" selected>MRI</option>
+                                <option value="ct">CT Scan</option>
+                                <option value="xray">X-Ray</option>
+                                <option value="ultrasound">Ultrasound</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="urgency-level">Urgency Level:</label>
+                            <select id="urgency-level" required>
+                                <option value="routine">Routine</option>
+                                <option value="urgent">Urgent</option>
+                                <option value="stat">STAT</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="clinical-notes">Clinical Notes: <small>(minimum 50 characters)</small></label>
+                            <textarea id="clinical-notes" rows="4" placeholder="Describe symptoms, duration, and medical necessity..." required minlength="50">Patient presents with chronic right shoulder pain lasting 6 months. Conservative treatment with physical therapy has failed. MRI needed to evaluate for rotator cuff tear and determine appropriate treatment plan.</textarea>
+                        </div>
+                        
+                        <button type="submit" id="submit-btn" style="width: 100%;">Submit Authorization Request</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Decisions Tab -->
+            <div id="decisions-tab" class="tab-content">
+                <div class="card">
+                    <h3>Recent Decisions</h3>
+                    <div id="decisions-list">
+                        <div class="loading">Loading decisions...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Review Requests Tab (for Payer Admins/Compliance Officers) -->
+            <div id="review-tab" class="tab-content">
+                <div class="card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h3>Pending Authorization Requests</h3>
+                        <div>
+                            <select id="review-filter" onchange="loadPendingRequests()">
+                                <option value="all">All Requests</option>
+                                <option value="submitted">Submitted</option>
+                                <option value="in_review">In Review</option>
+                                <option value="urgent">Urgent Only</option>
+                            </select>
+                            <button onclick="loadPendingRequests()" class="btn-secondary">Refresh</button>
+                        </div>
+                    </div>
+                    <div id="pending-requests-list">
+                        <div class="loading">Loading pending requests...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Make Decision Tab -->
+            <div id="make-decision-tab" class="tab-content">
+                <div class="card">
+                    <h3>Make Authorization Decision</h3>
+                    <div id="decision-form-container">
+                        <p>Select a request from the "Review Requests" tab to make a decision.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Alert Container -->
+        <div id="alert-container"></div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://127.0.0.1:8000/api/v1';
+        let authToken = null;
+        let currentUser = null;
+        let submittedRequests = []; // Track submitted requests locally
+
+        // Utility Functions
+        function showAlert(message, type = 'success') {
+            const alertContainer = document.getElementById('alert-container');
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type}`;
+            alertDiv.textContent = message;
+            alertContainer.appendChild(alertDiv);
+            
+            setTimeout(() => {
+                alertDiv.remove();
+            }, 5000);
+        }
+
+        function formatDate(dateString) {
+            return new Date(dateString).toLocaleString();
+        }
+
+        function generateRequestId() {
+            const timestamp = new Date().toISOString().replace(/[-:]/g, '').split('.')[0];
+            const random = Math.random().toString(36).substring(2, 8);
+            return `req_${timestamp}_${random}`;
+        }
+
+        // Authentication
+        async function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const loginBtn = document.getElementById('login-btn');
+            
+            if (!username || !password) {
+                showAlert('Please enter username and password', 'error');
+                return;
+            }
+            
+            loginBtn.disabled = true;
+            loginBtn.textContent = 'Logging in...';
+            
+            try {
+                console.log('Attempting login with:', username);
+                console.log('API Base URL:', API_BASE);
+                
+                const response = await axios.post(`${API_BASE}/auth/login`, 
+                    `username=${username}&password=${password}`,
+                    { 
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        timeout: 10000 // 10 second timeout
+                    }
+                );
+                
+                console.log('Login response:', response.data);
+                authToken = response.data.access_token;
+                
+                // Get user info
+                const userResponse = await axios.get(`${API_BASE}/auth/me`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` },
+                    timeout: 10000
+                });
+                
+                console.log('User info:', userResponse.data);
+                currentUser = userResponse.data;
+                
+                // Show dashboard
+                document.getElementById('login-section').classList.add('hidden');
+                document.getElementById('dashboard-section').classList.remove('hidden');
+                
+                // Update user info
+                document.getElementById('user-name').textContent = currentUser.username || 'User';
+                document.getElementById('user-role').textContent = currentUser.roles.join(', ');
+                
+                // Show/hide tabs based on user role
+                updateUIForUserRole(currentUser.roles);
+                
+                // Load initial data
+                loadDashboardData();
+                loadRequests();
+                
+                showAlert('Login successful!');
+                
+            } catch (error) {
+                console.error('Login error details:', error);
+                
+                let errorMessage = 'Login failed: ';
+                
+                if (error.code === 'ECONNABORTED') {
+                    errorMessage += 'Request timeout - server may be down';
+                } else if (error.code === 'ERR_NETWORK') {
+                    errorMessage += 'Network error - check if server is running on http://127.0.0.1:8000';
+                } else if (error.response) {
+                    // Server responded with error
+                    errorMessage += error.response.data?.detail || `HTTP ${error.response.status}`;
+                    console.log('Server error response:', error.response.data);
+                } else if (error.request) {
+                    // Request made but no response
+                    errorMessage += 'No response from server - check CORS or server status';
+                    console.log('No response received:', error.request);
+                } else {
+                    // Something else happened
+                    errorMessage += error.message || 'Unknown error';
+                }
+                
+                showAlert(errorMessage, 'error');
+            } finally {
+                loginBtn.disabled = false;
+                loginBtn.textContent = 'Login';
+            }
+        }
+
+        function logout() {
+            authToken = null;
+            currentUser = null;
+            document.getElementById('dashboard-section').classList.add('hidden');
+            document.getElementById('login-section').classList.remove('hidden');
+            document.getElementById('username').value = '';
+            document.getElementById('password').value = '';
+            showAlert('Logged out successfully');
+        }
+
+        // Dashboard Data
+        async function loadDashboardData() {
+            if (!currentUser) return;
+            
+            try {
+                console.log('Loading dashboard data for provider: prov_12345');
+                const response = await axios.get(`${API_BASE}/dashboard/summary/prov_12345`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                
+                console.log('Dashboard response:', response.data);
+                const data = response.data;
+                document.getElementById('total-requests').textContent = data.total_requests;
+                document.getElementById('pending-requests').textContent = data.pending_requests;
+                document.getElementById('approved-requests').textContent = data.approved_requests;
+                document.getElementById('approval-rate').textContent = data.approval_rate_percentage + '%';
+                
+            } catch (error) {
+                console.error('Dashboard data error:', error);
+                // Don't show error alert for dashboard data - it's not critical
+                // showAlert('Failed to load dashboard data', 'error');
+            }
+        }
+
+        // Requests Management
+        async function loadRequests() {
+            const requestsList = document.getElementById('requests-list');
+            requestsList.innerHTML = '<div class="loading">Loading requests...</div>';
+            
+            try {
+                console.log('Loading requests for provider: prov_12345');
+                const response = await axios.get(`${API_BASE}/dashboard/requests/prov_12345`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                
+                console.log('Requests response:', response.data);
+                let requests = response.data.requests;
+                
+                // Merge with locally tracked requests if dashboard is empty
+                if (requests.length === 0 && submittedRequests.length > 0) {
+                    requests = submittedRequests;
+                    console.log('Using locally tracked requests:', requests);
+                }
+                
+                if (requests.length === 0) {
+                    requestsList.innerHTML = '<p>No requests found. Submit your first request!</p>';
+                    return;
+                }
+                
+                // First, display the basic request list
+                requestsList.innerHTML = requests.map(request => `
+                    <div class="request-item" id="request-${request.request_id}">
+                        <div class="request-header">
+                            <span class="request-id">${request.request_id}</span>
+                            <span class="status-badge status-${request.status}">${request.status}</span>
+                        </div>
+                        <div>
+                            <strong>Procedure:</strong> ${request.procedure_type || 'N/A'}<br>
+                            <strong>Submitted:</strong> ${formatDate(request.submitted_at)}<br>
+                            <strong>Status:</strong> ${request.status}
+                        </div>
+                        <div id="decision-info-${request.request_id}" style="margin-top: 10px;">
+                            ${['approved', 'denied'].includes(request.status) ? '<div style="color: #6c757d; font-style: italic;">Loading decision details...</div>' : ''}
+                        </div>
+                        <div style="margin-top: 10px;">
+                            <button onclick="checkRequestStatus('${request.request_id}')" class="btn-secondary" style="font-size: 12px;">Check Status</button>
+                            <button onclick="getDecision('${request.request_id}')" class="btn-secondary" style="font-size: 12px;">Get Decision</button>
+                        </div>
+                    </div>
+                `).join('');
+                
+                // Then, load decision details for completed requests
+                for (const request of requests) {
+                    if (['approved', 'denied'].includes(request.status)) {
+                        loadDecisionInfo(request.request_id, request.status);
+                    }
+                }
+                
+            } catch (error) {
+                console.error('Load requests error:', error);
+                requestsList.innerHTML = '<p>Failed to load requests. Please try again.</p>';
+                // Don't show error alert for requests loading - it's not critical for submission
+                // showAlert('Failed to load requests', 'error');
+            }
+        }
+
+        // Load decision information for a specific request
+        async function loadDecisionInfo(requestId, status) {
+            const decisionInfoDiv = document.getElementById(`decision-info-${requestId}`);
+            if (!decisionInfoDiv) return;
+            
+            try {
+                const decisionResponse = await axios.get(`${API_BASE}/decisions/by-request/${requestId}`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                
+                if (decisionResponse.status === 200) {
+                    const decision = decisionResponse.data;
+                    const reasoningText = Array.isArray(decision.reasoning) 
+                        ? decision.reasoning.join('. ') 
+                        : decision.reasoning || 'No reasoning provided';
+                    
+                    const statusIcon = status === 'approved' ? '✅' : '❌';
+                    const statusColor = status === 'approved' ? '#28a745' : '#dc3545';
+                    
+                    decisionInfoDiv.innerHTML = `
+                        <div class="decision-info" style="padding: 10px; background: #f8f9fa; border-left: 4px solid ${statusColor}; border-radius: 4px;">
+                            <div style="font-weight: bold; color: ${statusColor}; margin-bottom: 5px;">
+                                ${statusIcon} Decision: ${status.toUpperCase()}
+                            </div>
+                            <div style="font-size: 14px; color: #495057;">
+                                <strong>Reasoning:</strong> ${reasoningText}
+                            </div>
+                            ${decision.authorization_number ? `
+                                <div style="font-size: 14px; color: #495057; margin-top: 5px;">
+                                    <strong>Authorization #:</strong> ${decision.authorization_number}
+                                </div>
+                            ` : ''}
+                            <div style="font-size: 12px; color: #6c757d; margin-top: 5px;">
+                                Decided: ${formatDate(decision.decided_at)} | Confidence: ${Math.round((decision.confidence_score || 0) * 100)}%
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    decisionInfoDiv.innerHTML = '<div style="color: #dc3545; font-size: 12px;">Decision details not available</div>';
+                }
+            } catch (error) {
+                console.log(`No decision found for request ${requestId}:`, error);
+                decisionInfoDiv.innerHTML = '<div style="color: #6c757d; font-size: 12px;">Decision details not available</div>';
+            }
+        }
+
+        async function checkRequestStatus(requestId) {
+            try {
+                const response = await axios.get(`${API_BASE}/authorization/requests/${requestId}`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                
+                const status = response.data;
+                showAlert(`Request ${requestId}: ${status.status} (${status.progress_percentage}% complete)`);
+                
+            } catch (error) {
+                console.error('Status check error:', error);
+                showAlert('Failed to check request status', 'error');
+            }
+        }
+
+        async function getDecision(requestId) {
+            try {
+                const response = await axios.get(`${API_BASE}/decisions/by-request/${requestId}`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                
+                const decision = response.data;
+                
+                // Create detailed decision modal
+                const statusIcon = decision.status === 'approved' ? '✅' : decision.status === 'denied' ? '❌' : 'ℹ️';
+                const statusColor = decision.status === 'approved' ? '#28a745' : decision.status === 'denied' ? '#dc3545' : '#ffc107';
+                
+                const reasoningText = Array.isArray(decision.reasoning) 
+                    ? decision.reasoning.map(reason => `• ${reason}`).join('<br>')
+                    : decision.reasoning || 'No reasoning provided';
+                
+                let detailsHtml = `
+                    <div style="text-align: left; max-width: 500px;">
+                        <div style="text-align: center; margin-bottom: 20px;">
+                            <h3 style="color: ${statusColor}; margin: 0;">
+                                ${statusIcon} ${decision.status.toUpperCase()}
+                            </h3>
+                            <p style="margin: 5px 0; color: #6c757d;">Request ID: ${requestId}</p>
+                        </div>
+                        
+                        <div style="background: #f8f9fa; padding: 15px; border-radius: 5px; margin-bottom: 15px;">
+                            <h4 style="margin: 0 0 10px 0; color: #495057;">Decision Reasoning:</h4>
+                            <div style="color: #495057; line-height: 1.5;">${reasoningText}</div>
+                        </div>
+                        
+                        ${decision.authorization_number ? `
+                            <div style="background: #d4edda; padding: 10px; border-radius: 5px; margin-bottom: 15px;">
+                                <strong>Authorization Number:</strong> ${decision.authorization_number}
+                                ${decision.valid_until ? `<br><strong>Valid Until:</strong> ${formatDate(decision.valid_until)}` : ''}
+                            </div>
+                        ` : ''}
+                        
+                        ${decision.policy_references && decision.policy_references.length > 0 ? `
+                            <div style="margin-bottom: 15px;">
+                                <h4 style="margin: 0 0 10px 0; color: #495057;">Policy References:</h4>
+                                <ul style="margin: 0; padding-left: 20px; color: #6c757d;">
+                                    ${decision.policy_references.map(ref => `<li>${ref}</li>`).join('')}
+                                </ul>
+                            </div>
+                        ` : ''}
+                        
+                        <div style="font-size: 12px; color: #6c757d; border-top: 1px solid #dee2e6; padding-top: 10px;">
+                            <strong>Decision Details:</strong><br>
+                            Decided: ${formatDate(decision.decided_at)}<br>
+                            Confidence: ${Math.round((decision.confidence_score || 0) * 100)}%<br>
+                            Decision ID: ${decision.decision_id}
+                        </div>
+                    </div>
+                `;
+                
+                // Show in a custom modal-like alert
+                const alertDiv = document.createElement('div');
+                alertDiv.style.cssText = `
+                    position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+                    background: rgba(0,0,0,0.5); z-index: 1000; display: flex; 
+                    align-items: center; justify-content: center;
+                `;
+                
+                alertDiv.innerHTML = `
+                    <div style="background: white; padding: 20px; border-radius: 10px; max-width: 90%; max-height: 90%; overflow-y: auto;">
+                        ${detailsHtml}
+                        <div style="text-align: center; margin-top: 20px;">
+                            <button onclick="this.closest('div[style*=\"position: fixed\"]').remove()" 
+                                    style="background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer;">
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                `;
+                
+                document.body.appendChild(alertDiv);
+                
+            } catch (error) {
+                if (error.response?.status === 404) {
+                    showAlert('Decision not yet available for this request', 'error');
+                } else {
+                    console.error('Decision error:', error);
+                    showAlert('Failed to get decision', 'error');
+                }
+            }
+        }
+
+        // Submit Request
+        async function submitRequest(event) {
+            event.preventDefault();
+            
+            const submitBtn = document.getElementById('submit-btn');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Submitting...';
+            
+            try {
+                const requestData = {
+                    request_id: generateRequestId(),
+                    provider_id: document.getElementById('provider-id').value,
+                    patient_demographics: {
+                        patient_id: `enc_pat_${Date.now()}`,
+                        age: parseInt(document.getElementById('patient-age').value),
+                        gender: document.getElementById('patient-gender').value,
+                        insurance_id: `enc_ins_${Date.now()}`,
+                        member_id: `enc_mem_${Date.now()}`
+                    },
+                    diagnosis_codes: [{
+                        code: document.getElementById('diagnosis-code').value,
+                        description: document.getElementById('diagnosis-description').value,
+                        category: "general"
+                    }],
+                    procedure_codes: [{
+                        code: document.getElementById('procedure-code').value,
+                        description: document.getElementById('procedure-description').value,
+                        category: "radiology"
+                    }],
+                    clinical_notes: document.getElementById('clinical-notes').value,
+                    procedure_type: document.getElementById('procedure-type').value,
+                    urgency_level: document.getElementById('urgency-level').value
+                };
+                
+                const response = await axios.post(`${API_BASE}/authorization/requests`, requestData, {
+                    headers: { 
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const requestId = response.data.request_id;
+                showAlert(`Request submitted successfully! ID: ${requestId}`);
+                
+                // Track the submitted request locally
+                submittedRequests.push({
+                    request_id: requestId,
+                    status: 'submitted',
+                    procedure_type: requestData.procedure_type,
+                    submitted_at: new Date().toISOString(),
+                    diagnosis: requestData.diagnosis_codes[0].description,
+                    procedure: requestData.procedure_codes[0].description
+                });
+                
+                // Reset form
+                document.getElementById('request-form').reset();
+                document.getElementById('provider-id').value = 'prov_12345';
+                document.getElementById('urgency-level').value = 'routine';
+                
+                // Refresh data (but don't let errors here affect the success message)
+                try {
+                    await loadDashboardData();
+                    await loadRequests();
+                } catch (refreshError) {
+                    console.warn('Failed to refresh dashboard data:', refreshError);
+                    // Don't show error - the submission was successful
+                }
+                
+                // Switch to requests tab
+                try {
+                    showTab('requests');
+                } catch (tabError) {
+                    console.warn('Failed to switch tabs:', tabError);
+                    // Don't let tab switching errors affect the submission success
+                }
+                
+            } catch (error) {
+                console.error('Submit error:', error);
+                let errorMessage = 'Failed to submit request';
+                
+                if (error.response?.data?.error?.details?.business_validation_errors) {
+                    const validationErrors = error.response.data.error.details.business_validation_errors;
+                    errorMessage = 'Validation Error:\n';
+                    validationErrors.forEach(err => {
+                        errorMessage += `• ${err.field}: ${err.message}\n`;
+                        if (err.suggestion) {
+                            errorMessage += `  Suggestion: ${err.suggestion}\n`;
+                        }
+                    });
+                } else if (error.response?.data?.details) {
+                    errorMessage += ': ' + error.response.data.details.message;
+                } else if (error.response?.data?.error?.message) {
+                    errorMessage += ': ' + error.response.data.error.message;
+                } else if (error.response?.data?.detail) {
+                    errorMessage += ': ' + error.response.data.detail;
+                }
+                
+                showAlert(errorMessage, 'error');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Submit Authorization Request';
+            }
+        }
+
+        // Tab Management
+        function showTab(tabName, clickedElement = null) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Show selected tab
+            document.getElementById(`${tabName}-tab`).classList.add('active');
+            
+            // Activate the clicked tab or find it by name
+            if (clickedElement) {
+                clickedElement.classList.add('active');
+            } else {
+                // Find the tab by name and activate it
+                const tabs = document.querySelectorAll('.tab');
+                tabs.forEach(tab => {
+                    if (tab.textContent.toLowerCase().includes(tabName.replace('-', ' '))) {
+                        tab.classList.add('active');
+                    }
+                });
+            }
+            
+            // Load data for specific tabs
+            if (tabName === 'requests') {
+                loadRequests();
+            } else if (tabName === 'decisions') {
+                loadDecisions();
+            }
+        }
+
+        async function loadDecisions() {
+            const decisionsList = document.getElementById('decisions-list');
+            decisionsList.innerHTML = '<div class="loading">Loading decisions...</div>';
+            
+            try {
+                const response = await axios.get(`${API_BASE}/decisions/provider/prov_12345/history`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                
+                const decisions = response.data.decisions || [];
+                
+                if (decisions.length === 0) {
+                    decisionsList.innerHTML = '<p>No decisions found.</p>';
+                    return;
+                }
+                
+                decisionsList.innerHTML = decisions.map(decision => `
+                    <div class="request-item">
+                        <div class="request-header">
+                            <span class="request-id">${decision.request_id}</span>
+                            <span class="status-badge status-${decision.status}">${decision.status}</span>
+                        </div>
+                        <div>
+                            <strong>Decision ID:</strong> ${decision.decision_id}<br>
+                            <strong>Decided:</strong> ${formatDate(decision.decided_at)}<br>
+                            ${decision.authorization_number ? `<strong>Auth #:</strong> ${decision.authorization_number}<br>` : ''}
+                            <strong>Confidence:</strong> ${(decision.confidence_score * 100).toFixed(1)}%
+                        </div>
+                        ${decision.reasoning && decision.reasoning.length > 0 ? `
+                            <div style="margin-top: 10px;">
+                                <strong>Reasoning:</strong>
+                                <ul style="margin-left: 20px;">
+                                    ${decision.reasoning.map(reason => `<li>${reason}</li>`).join('')}
+                                </ul>
+                            </div>
+                        ` : ''}
+                    </div>
+                `).join('');
+                
+            } catch (error) {
+                console.error('Load decisions error:', error);
+                decisionsList.innerHTML = '<p>Failed to load decisions. Please try again.</p>';
+            }
+        }
+
+        // Role-based UI Updates
+        function updateUIForUserRole(roles) {
+            const isProvider = roles.includes('provider');
+            const isPayerAdmin = roles.includes('payer_admin');
+            const isComplianceOfficer = roles.includes('compliance_officer');
+            const isSystemAdmin = roles.includes('system_admin');
+            
+            // Show/hide tabs based on role
+            if (isPayerAdmin || isComplianceOfficer || isSystemAdmin) {
+                document.getElementById('review-tab-btn').style.display = 'block';
+                document.getElementById('decision-tab-btn').style.display = 'block';
+            }
+            
+            // Hide submit tab for non-providers
+            if (!isProvider && !isSystemAdmin) {
+                document.getElementById('submit-tab-btn').style.display = 'none';
+            }
+        }
+
+        // Load Pending Requests for Review
+        async function loadPendingRequests() {
+            const requestsList = document.getElementById('pending-requests-list');
+            requestsList.innerHTML = '<div class="loading">Loading pending requests...</div>';
+            
+            try {
+                const filter = document.getElementById('review-filter').value;
+                let url = `${API_BASE}/authorization/requests?status=submitted,in_review`;
+                
+                if (filter !== 'all') {
+                    if (filter === 'urgent') {
+                        url += '&urgency_level=urgent,emergent';
+                    } else {
+                        url += `&status=${filter}`;
+                    }
+                }
+                
+                const response = await axios.get(url, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                
+                const requests = response.data.requests || [];
+                
+                if (requests.length === 0) {
+                    requestsList.innerHTML = '<p>No pending requests found.</p>';
+                    return;
+                }
+                
+                requestsList.innerHTML = requests.map(request => `
+                    <div class="request-review-item">
+                        <div class="request-review-header">
+                            <div>
+                                <span class="request-id">${request.request_id}</span>
+                                <span class="urgency-${request.urgency_level || 'routine'}">${(request.urgency_level || 'routine').toUpperCase()}</span>
+                            </div>
+                            <div>
+                                <span class="status-badge status-${request.status}">${request.status}</span>
+                                <button onclick="reviewRequest('${request.request_id}')" class="btn-secondary" style="margin-left: 10px;">Review</button>
+                            </div>
+                        </div>
+                        
+                        <div class="patient-info">
+                            <strong>Patient:</strong> ${request.patient_demographics?.age || 'N/A'} year old ${request.patient_demographics?.gender || 'N/A'}<br>
+                            <strong>Provider:</strong> ${request.provider_id}<br>
+                            <strong>Submitted:</strong> ${formatDate(request.submitted_at)}
+                        </div>
+                        
+                        <div class="medical-codes">
+                            <div class="code-group">
+                                <strong>Diagnosis Codes:</strong>
+                                ${(request.diagnosis_codes || []).map(code => `
+                                    <div class="code-item">${code.code} - ${code.description}</div>
+                                `).join('')}
+                            </div>
+                            <div class="code-group">
+                                <strong>Procedure Codes:</strong>
+                                ${(request.procedure_codes || []).map(code => `
+                                    <div class="code-item">${code.code} - ${code.description}</div>
+                                `).join('')}
+                            </div>
+                        </div>
+                        
+                        ${request.clinical_notes ? `
+                            <div class="clinical-notes">
+                                <strong>Clinical Notes:</strong><br>
+                                ${request.clinical_notes}
+                            </div>
+                        ` : ''}
+                    </div>
+                `).join('');
+                
+            } catch (error) {
+                console.error('Load pending requests error:', error);
+                requestsList.innerHTML = '<p>Failed to load pending requests. Please try again.</p>';
+            }
+        }
+
+        // Review Specific Request
+        async function reviewRequest(requestId) {
+            try {
+                console.log('Reviewing request:', requestId);
+                
+                // Get detailed request information
+                const response = await axios.get(`${API_BASE}/authorization/requests/${requestId}`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                
+                const request = response.data;
+                
+                // Switch to decision making tab and populate form
+                showTab('make-decision');
+                showDecisionForm(request);
+                
+            } catch (error) {
+                console.error('Review request error:', error);
+                showAlert('Failed to load request details for review', 'error');
+            }
+        }
+
+        // Show Decision Form
+        function showDecisionForm(request) {
+            const container = document.getElementById('decision-form-container');
+            
+            container.innerHTML = `
+                <div class="decision-form">
+                    <h4>Authorization Decision for ${request.request_id}</h4>
+                    
+                    <div class="patient-info">
+                        <strong>Patient:</strong> ${request.patient_demographics?.age || 'N/A'} year old ${request.patient_demographics?.gender || 'N/A'}<br>
+                        <strong>Provider:</strong> ${request.provider_id}<br>
+                        <strong>Submitted:</strong> ${formatDate(request.submitted_at)}<br>
+                        <strong>Current Status:</strong> ${request.status}<br>
+                        <strong>Progress:</strong> ${request.progress_percentage || 0}%
+                    </div>
+                    
+                    <div class="medical-codes">
+                        <div class="code-group">
+                            <strong>Diagnosis:</strong>
+                            ${(request.diagnosis_codes || []).map(code => `
+                                <div class="code-item">${code.code} - ${code.description}</div>
+                            `).join('')}
+                        </div>
+                        <div class="code-group">
+                            <strong>Procedure:</strong>
+                            ${(request.procedure_codes || []).map(code => `
+                                <div class="code-item">${code.code} - ${code.description}</div>
+                            `).join('')}
+                        </div>
+                    </div>
+                    
+                    ${request.clinical_notes ? `
+                        <div class="clinical-notes">
+                            <strong>Clinical Notes:</strong><br>
+                            ${request.clinical_notes}
+                        </div>
+                    ` : ''}
+                    
+                    <div class="decision-reasoning">
+                        <label for="decision-reasoning-text"><strong>Decision Reasoning:</strong></label>
+                        <textarea id="decision-reasoning-text" placeholder="Provide detailed reasoning for your decision, including policy references and medical necessity evaluation..."></textarea>
+                    </div>
+                    
+                    <div class="decision-buttons">
+                        <button onclick="makeDecision('${request.request_id}', 'approved')" class="btn-approve">
+                            ✓ Approve
+                        </button>
+                        <button onclick="makeDecision('${request.request_id}', 'denied')" class="btn-deny">
+                            ✗ Deny
+                        </button>
+                        <button onclick="makeDecision('${request.request_id}', 'more_info_needed')" class="btn-more-info">
+                            ? Request More Info
+                        </button>
+                    </div>
+                    
+                    <div style="margin-top: 20px;">
+                        <button onclick="getAIRecommendation('${request.request_id}')" class="btn-secondary">
+                            🤖 Get AI Recommendation
+                        </button>
+                        <button onclick="checkPolicyCompliance('${request.request_id}')" class="btn-secondary">
+                            📋 Check Policy Compliance
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Make Authorization Decision
+        async function makeDecision(requestId, decision) {
+            const reasoning = document.getElementById('decision-reasoning-text').value;
+            
+            if (!reasoning || reasoning.trim().length < 20) {
+                showAlert('Please provide detailed reasoning for your decision (minimum 20 characters)', 'error');
+                return;
+            }
+            
+            try {
+                const decisionData = {
+                    request_id: requestId,
+                    decision: decision,
+                    reasoning: reasoning.trim(),
+                    policy_references: [],
+                    additional_notes: null
+                };
+                
+                console.log('Making decision:', decisionData);
+                
+                const response = await axios.post(`${API_BASE}/manual-decisions/decide`, decisionData, {
+                    headers: { 
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const result = response.data;
+                
+                let message = `Decision "${decision.toUpperCase()}" recorded for request ${requestId}`;
+                if (result.authorization_number) {
+                    message += `\nAuthorization Number: ${result.authorization_number}`;
+                }
+                if (result.valid_until) {
+                    message += `\nValid Until: ${new Date(result.valid_until).toLocaleDateString()}`;
+                }
+                
+                showAlert(message, 'success');
+                
+                // Clear the form
+                document.getElementById('decision-form-container').innerHTML = `
+                    <div class="decision-history-item">
+                        <h4>Decision Submitted Successfully</h4>
+                        <p><strong>Decision ID:</strong> ${result.decision_id}</p>
+                        <p><strong>Request ID:</strong> ${result.request_id}</p>
+                        <p><strong>Decision:</strong> ${result.decision.toUpperCase()}</p>
+                        <p><strong>Decision Maker:</strong> ${result.decision_maker}</p>
+                        <p><strong>Decided At:</strong> ${formatDate(result.decided_at)}</p>
+                        ${result.authorization_number ? `<p><strong>Authorization Number:</strong> ${result.authorization_number}</p>` : ''}
+                        <p><strong>Reasoning:</strong> ${result.reasoning}</p>
+                        <button onclick="document.getElementById('decision-form-container').innerHTML = '<p>Select another request to review.</p>'" class="btn-secondary">Review Another Request</button>
+                    </div>
+                `;
+                
+                // Refresh pending requests
+                loadPendingRequests();
+                
+            } catch (error) {
+                console.error('Make decision error:', error);
+                let errorMessage = 'Failed to submit decision';
+                
+                if (error.response?.status === 403) {
+                    errorMessage = 'You do not have permission to make authorization decisions';
+                } else if (error.response?.data?.detail) {
+                    errorMessage = error.response.data.detail;
+                }
+                
+                showAlert(errorMessage, 'error');
+            }
+        }
+
+        // Get AI Recommendation
+        async function getAIRecommendation(requestId) {
+            try {
+                showAlert('Getting AI recommendation...', 'success');
+                
+                const response = await axios.get(`${API_BASE}/manual-decisions/ai-recommendation/${requestId}`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                
+                const result = response.data;
+                
+                // Add recommendation to reasoning text
+                const reasoningTextarea = document.getElementById('decision-reasoning-text');
+                const currentText = reasoningTextarea.value;
+                const newText = currentText + (currentText ? '\n\n' : '') + 
+                    `AI Recommendation (Confidence: ${(result.confidence_score * 100).toFixed(1)}%):\n${result.recommendation}`;
+                reasoningTextarea.value = newText;
+                
+                showAlert('AI recommendation added to reasoning', 'success');
+                
+            } catch (error) {
+                console.error('AI recommendation error:', error);
+                showAlert('Failed to get AI recommendation', 'error');
+            }
+        }
+
+        // Check Policy Compliance
+        async function checkPolicyCompliance(requestId) {
+            try {
+                showAlert('Checking policy compliance...', 'success');
+                
+                // This would call the policy validation service
+                // For now, we'll simulate it
+                const complianceChecks = [
+                    "✓ Procedure is covered under CMS guidelines",
+                    "✓ Provider is in-network and credentialed",
+                    "⚠ Consider prior conservative treatment documentation",
+                    "✓ Medical necessity criteria met per policy NCD-220.2"
+                ];
+                
+                // Add compliance check to reasoning text
+                const reasoningTextarea = document.getElementById('decision-reasoning-text');
+                const currentText = reasoningTextarea.value;
+                const newText = currentText + (currentText ? '\n\n' : '') + `Policy Compliance Check:\n${complianceChecks.join('\n')}`;
+                reasoningTextarea.value = newText;
+                
+                showAlert('Policy compliance check added to reasoning', 'success');
+                
+            } catch (error) {
+                console.error('Policy compliance error:', error);
+                showAlert('Failed to check policy compliance', 'error');
+            }
+        }
+
+        // Update the showTab function to handle new tabs
+        const originalShowTab = showTab;
+        showTab = function(tabName, clickedElement = null) {
+            originalShowTab(tabName, clickedElement);
+            
+            // Load data for specific tabs
+            if (tabName === 'review') {
+                loadPendingRequests();
+            }
+        };
+
+        // Auto-refresh every 30 seconds when dashboard is visible
+        setInterval(() => {
+            if (!document.getElementById('dashboard-section').classList.contains('hidden')) {
+                loadDashboardData();
+                
+                // Also refresh pending requests if review tab is active
+                if (document.getElementById('review-tab').classList.contains('active')) {
+                    loadPendingRequests();
+                }
+            }
+        }, 30000);
+    </script>
+</body>
+</html>

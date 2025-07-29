@@ -1,0 +1,79 @@
+version: '3.8'
+
+services:
+  prior-auth-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:password@db:5432/prior_auth
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET_KEY=dev-secret-key-change-in-production
+      - ENCRYPTION_KEY=dev-encryption-key-change-in-production
+      - LOG_LEVEL=INFO
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - prior-auth-network
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app/logs
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=prior_auth
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    networks:
+      - prior-auth-network
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes --requirepass redis-password
+    volumes:
+      - redis_data:/data
+    networks:
+      - prior-auth-network
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deployment/nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./deployment/nginx/ssl:/etc/nginx/ssl
+    depends_on:
+      - prior-auth-api
+    networks:
+      - prior-auth-network
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  prior-auth-network:
+    driver: bridge

@@ -1,0 +1,21 @@
+{
+  "enabled": true,
+  "name": "Healthcare Development Automation",
+  "description": "Automates documentation generation, unit testing, compliance validation, audit logging, and rule engine rebuilds for the prior authorization healthcare system",
+  "version": "1",
+  "when": {
+    "type": "fileCreated",
+    "patterns": [
+      "**/*.py",
+      "tests/**/*.py",
+      "scripts/**/*.py",
+      "config/**/*.json",
+      "config/**/*.yaml",
+      "docs/**/*.md"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "A file has been modified in the healthcare prior authorization system. Please perform the following automated tasks based on the file change:\n\n1. **On Python file save**: \n   - Generate documentation by running: python scripts/generate_docs.py\n   - Execute unit tests by running: pytest tests/\n   \n2. **On task completion**:\n   - Validate HIPAA compliance by running: python scripts/check_hipaa_compliance.py  \n   - Update audit log by running: python scripts/update_audit_log.py\n\n3. **On any file change**:\n   - Rebuild rule engine by running: python scripts/rebuild_rules.py\n\nEnsure all operations maintain HIPAA compliance and generate appropriate audit trails. Focus on healthcare-specific validation and maintain traceability for all authorization decisions."
+  }
+}
