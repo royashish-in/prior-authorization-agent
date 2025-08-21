@@ -35,7 +35,7 @@ MOCK_USERS_DB = {
         "username": "provider1",
         "email": "provider1@hospital.com",
         "full_name": "Dr. John Provider",
-        "hashed_password": get_password_hash("<SECURE_PASSWORD>"),  # Load from env
+        "hashed_password": get_password_hash("provider123"),  # Load from env
         "roles": [UserRole.PROVIDER],
         "organization_id": "org_hospital_001",
         "is_active": True
@@ -45,7 +45,7 @@ MOCK_USERS_DB = {
         "username": "admin1",
         "email": "admin1@payer.com",
         "full_name": "Jane Admin",
-        "hashed_password": get_password_hash("<SECURE_PASSWORD>"),  # Load from env
+        "hashed_password": get_password_hash("admin123"),  # Load from env
         "roles": [UserRole.PAYER_ADMIN],
         "organization_id": "org_payer_001",
         "is_active": True
@@ -55,7 +55,7 @@ MOCK_USERS_DB = {
         "username": "compliance1", 
         "email": "compliance1@payer.com",
         "full_name": "Bob Compliance",
-        "hashed_password": get_password_hash("<SECURE_PASSWORD>"),  # Load from env
+        "hashed_password": get_password_hash("compliance123"),  # Load from env
         "roles": [UserRole.COMPLIANCE_OFFICER],
         "organization_id": "org_payer_001",
         "is_active": True

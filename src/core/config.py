@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     """
     
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=[".env", ".env.local"],
         env_file_encoding="utf-8",
         case_sensitive=False,
         env_prefix="PA_"
@@ -109,6 +109,11 @@ class Settings(BaseSettings):
     llm_health_check_interval: int = Field(default=300, description="LLM health check interval in seconds")
     llm_enable_fallback: bool = Field(default=True, description="Enable LLM fallback to rule-based")
     llm_fallback_to_rules: bool = Field(default=True, description="Fallback to rules when LLM fails")
+    
+    # Kiro Integration Settings
+    kiro_code: str = Field(default="KIRO-nExH-N2Sm", description="Kiro project code", alias="KIRO_CODE")
+    kiro_project_id: str = Field(default="prior-authorization-agent", description="Kiro project ID", alias="KIRO_PROJECT_ID")
+    kiro_environment: str = Field(default="development", description="Kiro environment", alias="KIRO_ENVIRONMENT")
 
 
 @lru_cache()

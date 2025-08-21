@@ -38,6 +38,10 @@ pip install -r requirements.txt
 ```bash
 cp .env.example .env
 # Edit .env with your configuration
+
+# For sensitive tokens, create .env.local (already gitignored):
+echo "HUGGINGFACE_API_TOKEN=your_actual_token_here" > .env.local
+echo "KIRO_CODE=your_actual_kiro_code_here" >> .env.local
 ```
 
 ### Starting the Application
@@ -67,7 +71,8 @@ python frontend/serve.py
 
 **Frontend Dashboard:**
 - Dashboard: `http://localhost:8080/simple-dashboard.html`
-- Login: `provider1` / `provider123` or `admin1` / `admin123`
+- Login: Use credentials configured in environment variables (see .env.example)
+- Default test users: `provider1` / `admin1` (passwords set via environment)
 
 ## Health Checks
 
@@ -125,13 +130,21 @@ This application handles Protected Health Information (PHI) and implements:
 
 - AES-256 encryption for data at rest
 - TLS 1.3+ for data in transit
-- Role-based access controls
-- Comprehensive audit logging
+- Role-based access controls with proper authorization checks
+- Input sanitization to prevent injection attacks
+- Secure credential management (no hardcoded passwords)
+- Comprehensive audit logging with sanitized inputs
 - HIPAA compliance measures
+
+**Security Improvements:**
+- Fixed code injection vulnerabilities
+- Removed hardcoded credentials
+- Added authorization bypass protection
+- Implemented log injection prevention
 
 ## License
 
-This project is proprietary software for healthcare automation.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Support
 

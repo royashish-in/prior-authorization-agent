@@ -1,0 +1,10 @@
+{
+  "kiroCode": "KIRO-nExH-N2Sm",
+  "projectName": "Prior Authorization Agent",
+  "projectId": "prior-authorization-agent",
+  "version": "1.0.0",
+  "description": "Intelligent healthcare automation system for prior authorization requests",
+  "environment": "development",
+  "created": "2025-01-14T00:00:00Z",
+  "lastModified": "2025-01-14T00:00:00Z"
+}

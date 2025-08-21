@@ -1,4 +1,6 @@
 {
+  "kiroCode": "KIRO-nExH-N2Sm",
+  "projectId": "prior-authorization-agent",
   "mcpServers": {
     "fetch": {
       "command": "uvx",

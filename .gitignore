@@ -58,4 +58,23 @@ COVERAGE_*.md
 TASK_*.md
 HOLISTIC_REVIEW_REPORT.md
 VIDEO_SCRIPT_*.md
+KIRO_DEVELOPMENT_VIDEO_SCRIPT.md
 coverage_analysis.md
+
+# Screen recording files
+screen_recorder.py
+screen_recorder_with_audio.py
+simple_ffmpeg_recorder.py
+script_overlay_recorder.py
+hotkey_recorder.py
+invisible_recorder.py
+background_recorder.py
+stop_recorder.py
+requirements_recorder.txt
+SCREEN_RECORDING_SOP.md
+HOTKEY_RECORDER_SOP.md
+recording_*.mp4
+recording_*.wav
+recording_*_video.mp4
+recording_*_audio.wav
+recorder_*.pid
