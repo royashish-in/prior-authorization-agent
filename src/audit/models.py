@@ -31,6 +31,7 @@ class AuditEventType(str, Enum):
     PHI_UPDATE = "phi_update"
     PHI_DELETE = "phi_delete"
     PHI_EXPORT = "phi_export"
+    PHI_DEIDENTIFICATION = "phi_deidentification"
     
     # Authorization request events
     REQUEST_SUBMITTED = "request_submitted"
@@ -38,6 +39,20 @@ class AuditEventType(str, Enum):
     REQUEST_UPDATED = "request_updated"
     DECISION_GENERATED = "decision_generated"
     DECISION_VIEWED = "decision_viewed"
+    
+    # LLM and AI processing events
+    LLM_REQUEST_INITIATED = "llm_request_initiated"
+    LLM_REQUEST_COMPLETED = "llm_request_completed"
+    LLM_REQUEST_FAILED = "llm_request_failed"
+    LLM_DATA_PREPARATION = "llm_data_preparation"
+    LLM_EXTERNAL_CALL = "llm_external_call"
+    LLM_RESPONSE_PROCESSED = "llm_response_processed"
+    LLM_MODEL_LOADED = "llm_model_loaded"
+    LLM_MODEL_UNLOADED = "llm_model_unloaded"
+    LLM_FALLBACK_TRIGGERED = "llm_fallback_triggered"
+    AI_DECISION_GENERATED = "ai_decision_generated"
+    AI_CONFIDENCE_LOW = "ai_confidence_low"
+    AI_VALIDATION_FAILED = "ai_validation_failed"
     
     # Policy and configuration events
     POLICY_CREATED = "policy_created"

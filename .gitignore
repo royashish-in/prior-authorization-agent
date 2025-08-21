@@ -30,3 +30,32 @@ logs/
 venv/
 env/
 .venv/
+
+# Diagnostic/Debug scripts
+debug_*.py
+check_test_imports.py
+fix_*.py
+run_working_tests.py
+test_endpoint.py
+test_enhanced_endpoint.py
+verify_*.py
+validate_*.py
+init_medical_codes_db.py
+
+# Coverage and test reports
+.coverage
+coverage*.json
+system_test_report.json
+test_optimization_validation.json
+htmlcov/
+
+# Sample/temporary files
+sample_*.json
+prior_auth.db
+
+# Documentation files (should be in docs/)
+COVERAGE_*.md
+TASK_*.md
+HOLISTIC_REVIEW_REPORT.md
+VIDEO_SCRIPT_*.md
+coverage_analysis.md

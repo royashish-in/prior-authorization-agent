@@ -12,6 +12,12 @@ import asyncio
 from datetime import datetime, timezone, timedelta
 from unittest.mock import AsyncMock, patch, MagicMock
 
+from tests.utils.async_helpers import (
+    async_test_with_timeout,
+    reliable_async_test,
+    AsyncResourceManager
+)
+
 from src.services.external_services import (
     ExternalServiceIntegrator,
     ServiceStatus,
@@ -31,6 +37,8 @@ class TestExternalServiceIntegrator:
         yield integrator
         await integrator.close()
     
+    @pytest.mark.asyncio
+    @async_test_with_timeout(timeout=15.0)
     @pytest.mark.asyncio
     async def test_cms_guidelines_success(self, integrator):
         """Test successful CMS guidelines retrieval."""
@@ -69,6 +77,8 @@ class TestExternalServiceIntegrator:
             assert health["cms_guidelines"].status == ServiceStatus.AVAILABLE
     
     @pytest.mark.asyncio
+
+    
     async def test_cms_guidelines_caching(self, integrator):
         """Test CMS guidelines caching functionality."""
         procedure_codes = ["70551"]
@@ -102,6 +112,8 @@ class TestExternalServiceIntegrator:
             assert response1.model_dump() == response2.model_dump()
     
     @pytest.mark.asyncio
+
+    
     async def test_cms_guidelines_fallback(self, integrator):
         """Test CMS guidelines fallback on service error."""
         procedure_codes = ["70551"]
@@ -127,6 +139,8 @@ class TestExternalServiceIntegrator:
             assert health["cms_guidelines"].status == ServiceStatus.UNAVAILABLE
     
     @pytest.mark.asyncio
+
+    
     async def test_medical_code_validation_success(self, integrator):
         """Test successful medical code validation."""
         codes = [
@@ -148,6 +162,8 @@ class TestExternalServiceIntegrator:
             assert response.code_type in ["cpt", "icd10"]
     
     @pytest.mark.asyncio
+
+    
     async def test_medical_code_validation_invalid_codes(self, integrator):
         """Test medical code validation with invalid codes."""
         codes = [
@@ -168,6 +184,8 @@ class TestExternalServiceIntegrator:
             assert len(response.suggestions) > 0
     
     @pytest.mark.asyncio
+
+    
     async def test_medical_code_validation_caching(self, integrator):
         """Test medical code validation caching."""
         codes = [{"code": "70551", "code_type": "cpt"}]
@@ -196,6 +214,8 @@ class TestExternalServiceIntegrator:
             assert responses1[0].model_dump() == responses2[0].model_dump()
     
     @pytest.mark.asyncio
+
+    
     async def test_medical_code_validation_fallback(self, integrator):
         """Test medical code validation fallback on service error."""
         codes = [{"code": "70551", "code_type": "cpt"}]
@@ -217,6 +237,8 @@ class TestExternalServiceIntegrator:
             assert "Fallback validation" in response.description
     
     @pytest.mark.asyncio
+
+    
     async def test_policy_coverage_success(self, integrator):
         """Test successful policy coverage retrieval."""
         payer_id = "PAYER_001"
@@ -248,6 +270,8 @@ class TestExternalServiceIntegrator:
             assert len(response.policy_references) > 0
     
     @pytest.mark.asyncio
+
+    
     async def test_policy_coverage_conflict_resolution(self, integrator):
         """Test policy coverage conflict resolution."""
         payer_id = "PAYER_001"
@@ -282,6 +306,8 @@ class TestExternalServiceIntegrator:
             assert "most restrictive policy" in " ".join(response.reasoning)
     
     @pytest.mark.asyncio
+
+    
     async def test_policy_coverage_caching(self, integrator):
         """Test policy coverage caching."""
         payer_id = "PAYER_001"
@@ -323,6 +349,8 @@ class TestExternalServiceIntegrator:
             assert response1.model_dump() == response2.model_dump()
     
     @pytest.mark.asyncio
+
+    
     async def test_policy_coverage_fallback(self, integrator):
         """Test policy coverage fallback on service error."""
         payer_id = "PAYER_001"
@@ -346,6 +374,8 @@ class TestExternalServiceIntegrator:
             assert "Manual policy review required" in response.additional_requirements[0]
     
     @pytest.mark.asyncio
+
+    
     async def test_service_health_monitoring(self, integrator):
         """Test service health monitoring functionality."""
         # Initially no health data
@@ -367,6 +397,7 @@ class TestExternalServiceIntegrator:
             assert service_health.last_check is not None
     
     @pytest.mark.asyncio
+    @async_test_with_timeout(timeout=20.0)
     async def test_cache_expiration(self, integrator):
         """Test cache expiration functionality."""
         # Set very short TTL for testing
@@ -389,7 +420,7 @@ class TestExternalServiceIntegrator:
                 use_cache=True
             )
             
-            # Wait for cache to expire
+            # Wait for cache to expire with proper timeout handling
             await asyncio.sleep(1.1)
             
             # Second request should call API again due to expired cache
@@ -403,6 +434,8 @@ class TestExternalServiceIntegrator:
             assert mock_request.call_count == 2
     
     @pytest.mark.asyncio
+
+    
     async def test_cache_refresh(self, integrator):
         """Test cache refresh functionality."""
         # Add some data to cache
@@ -422,6 +455,7 @@ class TestExternalServiceIntegrator:
         assert len(integrator.cache["policies"]) == 0
     
     @pytest.mark.asyncio
+    @reliable_async_test(timeout=30.0, retries=1)
     async def test_concurrent_requests(self, integrator):
         """Test handling of concurrent requests to external services."""
         procedure_codes = ["70551"]
@@ -445,6 +479,7 @@ class TestExternalServiceIntegrator:
             assert isinstance(response, CMSGuidelinesResponse)
     
     @pytest.mark.asyncio
+    @async_test_with_timeout(timeout=10.0)
     async def test_context_manager(self):
         """Test async context manager functionality."""
         async with ExternalServiceIntegrator() as integrator:
@@ -460,6 +495,8 @@ class TestExternalServiceIntegration:
     """Integration tests with mock external services."""
     
     @pytest.mark.asyncio
+
+    
     async def test_full_workflow_integration(self):
         """Test complete workflow with all external services."""
         async with ExternalServiceIntegrator() as integrator:
@@ -498,6 +535,8 @@ class TestExternalServiceIntegration:
             assert len(health) >= 3  # Should have health data for all services
     
     @pytest.mark.asyncio
+
+    
     async def test_error_recovery_workflow(self):
         """Test error recovery and fallback mechanisms."""
         async with ExternalServiceIntegrator() as integrator:

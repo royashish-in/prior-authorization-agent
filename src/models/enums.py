@@ -45,3 +45,17 @@ class ProcedureType(str, Enum):
     ULTRASOUND = "ultrasound"
     MAMMOGRAPHY = "mammography"
     NUCLEAR_MEDICINE = "nuclear_medicine"
+
+
+class DecisionMode(str, Enum):
+    """Decision making modes for the enhanced decision engine."""
+    TRADITIONAL = "traditional"
+    LLM_ENHANCED = "llm_enhanced"
+    HYBRID = "hybrid"
+
+
+class MedicalCodeType(str, Enum):
+    """Types of medical codes."""
+    ICD10 = "icd10"
+    CPT = "cpt"
+    HCPCS = "hcpcs"

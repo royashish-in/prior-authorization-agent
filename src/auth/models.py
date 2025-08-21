@@ -22,6 +22,7 @@ class UserRole(str, Enum):
     PAYER_ADMIN = "payer_admin"  # Payer administrators managing policies
     COMPLIANCE_OFFICER = "compliance_officer"  # Compliance and audit access
     SYSTEM_ADMIN = "system_admin"  # System administration
+    ADMIN = "admin"  # Administrative access (alias for system_admin)
     API_CLIENT = "api_client"  # External system integration
 
 

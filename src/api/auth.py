@@ -28,13 +28,14 @@ router = APIRouter(prefix="/auth", tags=["authentication"])
 
 
 # Mock user database - In production, this would be a real database
+# Passwords should be loaded from secure environment variables
 MOCK_USERS_DB = {
     "provider1": {
         "user_id": "user_001",
         "username": "provider1",
         "email": "provider1@hospital.com",
         "full_name": "Dr. John Provider",
-        "hashed_password": get_password_hash("provider123"),
+        "hashed_password": get_password_hash("<SECURE_PASSWORD>"),  # Load from env
         "roles": [UserRole.PROVIDER],
         "organization_id": "org_hospital_001",
         "is_active": True
@@ -44,7 +45,7 @@ MOCK_USERS_DB = {
         "username": "admin1",
         "email": "admin1@payer.com",
         "full_name": "Jane Admin",
-        "hashed_password": get_password_hash("admin123"),
+        "hashed_password": get_password_hash("<SECURE_PASSWORD>"),  # Load from env
         "roles": [UserRole.PAYER_ADMIN],
         "organization_id": "org_payer_001",
         "is_active": True
@@ -54,7 +55,7 @@ MOCK_USERS_DB = {
         "username": "compliance1", 
         "email": "compliance1@payer.com",
         "full_name": "Bob Compliance",
-        "hashed_password": get_password_hash("compliance123"),
+        "hashed_password": get_password_hash("<SECURE_PASSWORD>"),  # Load from env
         "roles": [UserRole.COMPLIANCE_OFFICER],
         "organization_id": "org_payer_001",
         "is_active": True
@@ -116,6 +117,19 @@ def authenticate_user(username: str, password: str) -> User | None:
     )
     
     return user
+
+
+@router.post("/token", response_model=TokenResponse)
+async def token(
+    request: Request,
+    form_data: OAuth2PasswordRequestForm = Depends()
+) -> TokenResponse:
+    """
+    OAuth 2.0 token endpoint (standard OAuth2 endpoint name).
+    
+    This is an alias for the login endpoint to comply with OAuth2 standards.
+    """
+    return await login(request, form_data)
 
 
 @router.post("/login", response_model=TokenResponse)

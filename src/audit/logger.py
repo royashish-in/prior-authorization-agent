@@ -458,6 +458,42 @@ class AuditLogger:
             **kwargs
         )
     
+    def log_ai_config_action(
+        self,
+        action: str,
+        config_id: str,
+        user_id: str,
+        details: Optional[Dict[str, Any]] = None,
+        client_ip: str = "unknown",
+        **kwargs
+    ) -> str:
+        """
+        Log AI configuration-related actions.
+        
+        Args:
+            action: Action performed on AI configuration
+            config_id: Configuration identifier
+            user_id: User performing the action
+            details: Additional action details
+            client_ip: Client IP address
+            **kwargs: Additional event details
+            
+        Returns:
+            Event ID of the logged AI configuration event
+        """
+        return self.log_event(
+            event_type=AuditEventType.CONFIGURATION_CHANGE,
+            action=action,
+            outcome="success",
+            user_id=user_id,
+            client_ip=client_ip,
+            resource_type="ai_configuration",
+            resource_id=config_id,
+            security_level=SecurityLevel.MEDIUM,
+            details=details or {},
+            **kwargs
+        )
+    
     def get_events(
         self,
         start_time: Optional[datetime] = None,

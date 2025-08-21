@@ -270,7 +270,7 @@ class PriorAuthClient:
             data=credentials.model_dump()
         )
         
-        token_data = response.json()
+        token_data = await response.json() if hasattr(response.json, '__call__') and asyncio.iscoroutinefunction(response.json) else response.json()
         token_response = TokenResponse(**token_data)
         
         # Store access token for future requests
@@ -301,7 +301,7 @@ class PriorAuthClient:
             data=request.model_dump()
         )
         
-        response_data = response.json()
+        response_data = await response.json() if hasattr(response.json, '__call__') and asyncio.iscoroutinefunction(response.json) else response.json()
         return RequestSubmissionResponse(**response_data)
     
     async def get_request_status(self, request_id: str) -> RequestStatusInfo:

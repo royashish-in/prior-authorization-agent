@@ -12,6 +12,8 @@ from pydantic import BaseModel, Field, ConfigDict
 
 from src.models.enums import RequestStatus, ProcedureType, UrgencyLevel
 from src.services.tracking import TrackingService, RequestStatusInfo
+from src.auth.oauth2 import get_current_user
+from src.auth.models import TokenData
 from src.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -147,6 +149,7 @@ from src.api.intake import get_tracking_service
 @router.get("/summary/{provider_id}", response_model=DashboardSummary)
 async def get_provider_dashboard_summary(
     provider_id: str,
+    current_user: TokenData = Depends(get_current_user),
     tracking_service: TrackingService = Depends(get_tracking_service)
 ) -> DashboardSummary:
     """

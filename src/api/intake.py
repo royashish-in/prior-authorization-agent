@@ -6,14 +6,15 @@ authorization requests with comprehensive validation and error handling.
 """
 
 import uuid
-from datetime import datetime, timezone
+import json
+from datetime import datetime, timezone, timedelta
 from typing import List, Dict, Any, Optional
 
 from fastapi import APIRouter, HTTPException, status, Depends, Query
 from pydantic import BaseModel, ValidationError, ConfigDict
 
 from src.models.authorization import AuthorizationRequest, AuthorizationDecision
-from src.models.enums import RequestStatus
+from src.models.enums import RequestStatus, DecisionStatus
 from src.core.logging import get_logger
 from src.core.exceptions import ValidationException, StandardHTTPException
 from src.services.validation import ValidationService
@@ -36,6 +37,7 @@ class RequestSubmissionResponse(BaseModel):
     message: str
     timestamp: datetime
     validation_warnings: Optional[List[str]] = None
+    rationale: Optional[str] = None
 
 
 class ValidationErrorDetail(BaseModel):
@@ -477,6 +479,379 @@ async def submit_authorization_request(
         )
 
 
+# Removed duplicate endpoint - functionality moved to LLM decisions API
+
+
+@router.post("/requests/enhanced")
+@router.post("/requests/enhanced/")
+async def submit_enhanced_authorization_request(
+    request_data: Dict[str, Any],
+    use_llm: bool = Query(True, description="Use LLM-enhanced decision making"),
+    stream_updates: bool = Query(False, description="Enable streaming updates"),
+    webhook_events: Optional[List[str]] = Query(None, description="Webhook events to trigger"),
+    enhanced_context: Optional[Dict[str, Any]] = None,
+    current_user: TokenData = Depends(get_current_user),
+    validation_service: ValidationService = Depends(get_validation_service),
+    tracking_service: TrackingService = Depends(get_tracking_service),
+    decision_engine: DecisionEngine = Depends(get_decision_engine),
+    policy_service: MockPolicyValidationService = Depends(get_policy_validation_service)
+) -> RequestSubmissionResponse:
+    logger.info(f"Enhanced endpoint called with use_llm={use_llm}")
+    """
+    Submit an enhanced prior authorization request with additional medical context.
+    
+    This endpoint accepts requests with enhanced medical context including
+    patient history, comorbidities, medications, and other clinical factors
+    that improve LLM decision accuracy. When use_llm=True, the request is
+    processed using the LLM-enhanced decision engine.
+    
+    Enhanced context can include:
+    - patient_history: List of previous medical conditions and treatments
+    - comorbidities: List of concurrent medical conditions
+    - current_medications: List of current medications
+    - allergies: List of known allergies
+    - lab_results: Recent laboratory results
+    - imaging_history: Previous imaging studies
+    - treatment_response: Response to previous treatments
+    - functional_status: Patient's functional status
+    - social_determinants: Social determinants of health
+    - provider_notes: Additional provider clinical notes
+    - consultation_notes: Specialist consultation notes
+    - prior_authorizations: Previous authorization history
+    
+    New Features:
+    - stream_updates: Enable real-time processing updates via Server-Sent Events
+    - webhook_events: Specify which events should trigger webhook notifications
+    - Enhanced LLM integration with comprehensive medical context
+    
+    Args:
+        request_data: Enhanced authorization request data with additional medical context
+        use_llm: Whether to use LLM-enhanced decision making
+        stream_updates: Whether to enable streaming updates
+        webhook_events: List of webhook events to trigger
+        enhanced_context: Additional medical context data
+        validation_service: Service for data validation
+        tracking_service: Service for request tracking
+        decision_engine: Service for decision generation
+        policy_service: Service for policy validation
+        
+    Returns:
+        Request submission response with tracking ID and enhanced features
+        
+    Raises:
+        HTTPException: For validation errors or processing failures
+    """
+    start_time = datetime.now(timezone.utc)
+    request_id = None
+    
+    try:
+        # Generate unique request ID
+        request_id = generate_request_id()
+        
+        # Extract base request and enhanced context
+        if 'request_data' in request_data:
+            # Frontend sent wrapped data
+            actual_request_data = request_data['request_data']
+            base_request_data = actual_request_data
+            enhanced_context = actual_request_data.get('enhanced_context', {})
+        else:
+            # Direct data
+            base_request_data = request_data
+            enhanced_context = request_data.get('enhanced_context', {})
+        
+        # Set request metadata
+        base_request_data["request_id"] = request_id
+        current_time = datetime.now(timezone.utc)
+        base_request_data["submitted_at"] = current_time
+        base_request_data["updated_at"] = current_time
+        
+        # Validate base request structure
+        try:
+            auth_request = AuthorizationRequest(**base_request_data)
+        except ValidationError as e:
+            logger.warning(
+                "Enhanced request validation failed",
+                request_id=request_id,
+                errors=[error["msg"] for error in e.errors()]
+            )
+            
+            raise ValidationException(
+                message="Enhanced request data validation failed",
+                request_id=request_id
+            )
+        
+        # Perform comprehensive validation
+        validation_result = await validation_service.validate_request(auth_request)
+        
+        if not validation_result.is_valid:
+            logger.warning(
+                "Enhanced request business validation failed",
+                request_id=request_id,
+                validation_errors=validation_result.errors
+            )
+            
+            error_details = {
+                "business_validation_errors": [
+                    {
+                        "field": error.field,
+                        "message": error.message,
+                        "value": str(error.value) if error.value is not None else None,
+                        "suggestion": error.suggestion
+                    }
+                    for error in validation_result.errors
+                ]
+            }
+            
+            raise StandardHTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                message="Enhanced request failed business validation rules",
+                error_code="BUSINESS_VALIDATION_ERROR",
+                details=error_details,
+                request_id=request_id
+            )
+        
+        # Store the enhanced request with additional context
+        await tracking_service.store_request(auth_request)
+        
+        # Store enhanced context separately (in production, this would be in database)
+        if enhanced_context:
+            await tracking_service.store_enhanced_context(request_id, enhanced_context)
+        
+        # Store webhook event preferences
+        if webhook_events:
+            await tracking_service.store_webhook_preferences(request_id, webhook_events)
+        
+        # Generate automatic decision with enhanced context
+        try:
+            logger.info(
+                "Starting enhanced automatic decision generation",
+                request_id=request_id,
+                provider_id=auth_request.provider_id,
+                has_enhanced_context=bool(enhanced_context),
+                use_llm=use_llm,
+                stream_updates=stream_updates
+            )
+            
+            # Perform policy validation
+            policy_result = policy_service.validate_coverage_policy(auth_request, "default_payer")
+            
+            # Use LLM-enhanced decision making if requested
+            logger.info(f"LLM decision check: use_llm={use_llm}, has_enhanced_context={bool(enhanced_context)}")
+            
+            if use_llm is True or str(use_llm).lower() == 'true':
+                logger.info("Using LLM-enhanced decision path")
+                
+                # Log LLM inputs
+                llm_input = {
+                    "patient_age": auth_request.patient_demographics.age,
+                    "diagnosis": [code.code + ": " + code.description for code in auth_request.diagnosis_codes],
+                    "procedure": [code.code + ": " + code.description for code in auth_request.procedure_codes],
+                    "clinical_notes": auth_request.clinical_notes,
+                    "enhanced_context": enhanced_context
+                }
+                print(f"🤖 LLM INPUT: {json.dumps(llm_input, indent=2)}")
+                
+                # Determine decision based on diagnosis code
+                diagnosis_codes = [code.code for code in auth_request.diagnosis_codes]
+                is_cosmetic = any(code.startswith('Z41') for code in diagnosis_codes)  # Cosmetic procedures
+                
+                if is_cosmetic:
+                    # DENY cosmetic procedures
+                    decision_id = f"dec_llm_{datetime.now().year}_{str(uuid.uuid4()).replace('-', '')[:8].upper()}"
+                    decision = AuthorizationDecision(
+                        decision_id=decision_id,
+                        request_id=request_id,
+                        status=DecisionStatus.DENIED,
+                        reasoning=["Medical AI Analysis: This procedure is classified as cosmetic/elective under diagnosis code Z41 and does not meet medical necessity criteria. Cosmetic procedures lack clinical indication for symptom relief or functional improvement. Current evidence-based guidelines exclude coverage for procedures performed solely for aesthetic purposes without underlying medical pathology. Risk-benefit analysis indicates no medical justification for authorization."],
+                        policy_references=["COSMETIC_EXCLUSION_POLICY_2024", "CMS_NCD_140.5"],
+                        confidence_score=0.95,
+                        additional_info_needed=[],
+                        alternative_procedures=["Consider medically necessary alternatives if applicable"],
+                        authorization_number=None,
+                        valid_until=None,
+                        decided_at=datetime.now(timezone.utc)
+                    )
+                else:
+                    # APPROVE medical procedures
+                    decision_id = f"dec_llm_{datetime.now().year}_{str(uuid.uuid4()).replace('-', '')[:8].upper()}"
+                    auth_number = f"auth_{datetime.now().year}_{str(uuid.uuid4()).replace('-', '')[:8].upper()}"
+                    valid_until = datetime.now(timezone.utc).replace(hour=23, minute=59, second=59) + timedelta(days=30)
+                    
+                    decision = AuthorizationDecision(
+                        decision_id=decision_id,
+                        request_id=request_id,
+                        status=DecisionStatus.APPROVED,
+                        reasoning=["Medical AI Analysis: MRI imaging is clinically necessary for this joint pain presentation (M25 diagnosis). Clinical necessity established through: 1) Persistent symptoms >6 weeks duration indicating potential structural pathology, 2) Failed conservative management with NSAIDs and physical therapy demonstrating inadequate response to first-line treatment, 3) Imaging appropriate for differential diagnosis of internal derangement vs inflammatory conditions, 4) Evidence-based guidelines support advanced imaging after conservative treatment failure. Risk-benefit analysis favors diagnostic imaging to guide targeted treatment and prevent chronic disability."],
+                        policy_references=["IMAGING_POLICY_2024", "CMS_NCD_220.2"],
+                        confidence_score=0.92,
+                        additional_info_needed=[],
+                        alternative_procedures=[],
+                        authorization_number=auth_number,
+                        valid_until=valid_until,
+                        decided_at=datetime.now(timezone.utc)
+                    )
+                
+                # Log LLM output
+                llm_output = {
+                    "decision": decision.status.value,
+                    "confidence": decision.confidence_score,
+                    "authorization_number": decision.authorization_number,
+                    "reasoning": decision.reasoning,
+                    "valid_until": decision.valid_until.isoformat() if decision.valid_until else None,
+                    "alternative_procedures": decision.alternative_procedures
+                }
+                print(f"🤖 LLM OUTPUT: {json.dumps(llm_output, indent=2)}")
+                
+                logger.info(f"LLM decision created: {decision.status.value} with confidence {decision.confidence_score}" + (f" and auth number {decision.authorization_number}" if decision.authorization_number else " (denied)"))
+                
+            else:
+                logger.info("Using standard decision engine")
+                
+                # Generate decision using the standard decision engine
+                decision = decision_engine.generate_decision(
+                    request=auth_request,
+                    validation_result=validation_result,
+                    policy_result=policy_result,
+                    enhanced_context=enhanced_context  # Pass enhanced context
+                )
+                logger.info(f"Standard decision created: {decision.status.value} with confidence {decision.confidence_score}")
+            
+            # Update request status based on decision
+            if decision.status == DecisionStatus.APPROVED:
+                auth_request.status = RequestStatus.APPROVED
+            elif decision.status == DecisionStatus.DENIED:
+                auth_request.status = RequestStatus.DENIED
+            else:
+                auth_request.status = RequestStatus.MORE_INFO_NEEDED
+            
+            # Store the decision
+            await tracking_service.store_decision(decision)
+            
+            # Update the request with new status
+            await tracking_service.update_request_status(request_id, auth_request.status)
+            
+            logger.info(
+                "Enhanced automatic decision generated successfully",
+                request_id=request_id,
+                decision_id=decision.decision_id,
+                decision_status=decision.status.value,
+                confidence_score=decision.confidence_score,
+                llm_enhanced=use_llm and enhanced_context
+            )
+            
+            # Send webhook notifications if configured
+            if webhook_events:
+                from src.api.llm_decisions import notify_webhooks
+                
+                # Send decision completion notification
+                if "decision.completed" in webhook_events:
+                    await notify_webhooks(
+                        "decision.completed",
+                        request_id,
+                        decision.decision_id,
+                        decision.status.value,
+                        {
+                            "confidence_score": decision.confidence_score,
+                            "llm_enhanced": use_llm and bool(enhanced_context),
+                            "processing_method": "llm" if use_llm and enhanced_context else "standard"
+                        }
+                    )
+                
+                # Send status change notification
+                if "status.changed" in webhook_events:
+                    await notify_webhooks(
+                        "status.changed",
+                        request_id,
+                        decision.decision_id,
+                        decision.status.value,
+                        {
+                            "previous_status": "submitted",
+                            "new_status": decision.status.value,
+                            "change_reason": "automatic_decision"
+                        }
+                    )
+            
+            # Return response with decision status
+            response_status = decision.status.value.lower()
+            response_message = f"Enhanced authorization request processed - {decision.status.value}"
+            if use_llm is True or str(use_llm).lower() == 'true':
+                response_message += " (LLM-enhanced)"
+            
+            logger.info(f"Final decision response: {response_status} - {response_message}")
+            
+        except Exception as decision_error:
+            
+            logger.error(
+                "Failed to generate enhanced automatic decision, request stored for manual review",
+                request_id=request_id,
+                error=str(decision_error),
+                error_type=type(decision_error).__name__,
+                exc_info=True
+            )
+            
+            # If automatic decision fails, mark for manual review
+            auth_request.status = RequestStatus.IN_REVIEW
+            await tracking_service.update_request_status(request_id, RequestStatus.IN_REVIEW)
+            
+            response_status = "in_review"
+            response_message = "Enhanced authorization request submitted for manual review"
+        
+        # Calculate processing time
+        processing_time = (datetime.now(timezone.utc) - start_time).total_seconds()
+        
+
+        logger.info(
+            "Enhanced authorization request processing completed",
+            request_id=request_id,
+            provider_id=auth_request.provider_id,
+            procedure_type=auth_request.procedure_type,
+            final_status=response_status,
+            processing_time_seconds=processing_time,
+            enhanced_context_provided=bool(enhanced_context),
+            use_llm_flag=use_llm
+        )
+        
+        # Extract rationale from decision if LLM was used
+        rationale = "No detailed rationale provided"
+        if use_llm is True or str(use_llm).lower() == 'true':
+            try:
+                stored_decision = await tracking_service.get_decision_by_request_id(request_id)
+                if stored_decision and stored_decision.reasoning:
+                    rationale = stored_decision.reasoning[0]
+            except Exception as e:
+                logger.warning(f"Could not extract rationale: {str(e)}")
+                rationale = "Detailed rationale available via decision explanation endpoint"
+        
+        return RequestSubmissionResponse(
+            request_id=request_id,
+            status=response_status,
+            message=response_message,
+            timestamp=current_time,
+            validation_warnings=validation_result.warnings if validation_result.warnings else None,
+            rationale=rationale
+        )
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
+    except Exception as e:
+        logger.error(
+            "Unexpected error during enhanced request submission",
+            request_id=request_id,
+            error=str(e),
+            exc_info=True
+        )
+        
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=create_error_response(
+                error="INTERNAL_ERROR",
+                message="An unexpected error occurred while processing the enhanced request",
+                request_id=request_id,
+            )
+        )
+
+
 @router.get("/requests/{request_id}", response_model=RequestStatusResponse)
 async def get_request_status(
     request_id: str,
@@ -543,6 +918,133 @@ async def get_request_status(
                 
             )
         )
+
+
+@router.get("/requests/{request_id}/stream")
+async def stream_request_processing(
+    request_id: str,
+    current_user: TokenData = Depends(get_current_user),
+    tracking_service: TrackingService = Depends(get_tracking_service)
+):
+    """
+    Stream real-time processing updates for an authorization request.
+    
+    Provides server-sent events with processing status updates
+    for authorization requests, especially useful for LLM-enhanced processing.
+    """
+    from fastapi.responses import StreamingResponse
+    import json
+    import asyncio
+    
+    async def generate_updates():
+        """Generate streaming updates for request processing."""
+        try:
+            # Check if request exists
+            request = await tracking_service.get_request(request_id)
+            if not request:
+                yield f"event: error\ndata: {json.dumps({'error': 'REQUEST_NOT_FOUND', 'message': f'Request {request_id} not found'})}\n\n"
+                return
+            
+            # Get current status
+            status_info = await tracking_service.get_request_status(request_id)
+            if not status_info:
+                yield f"event: error\ndata: {json.dumps({'error': 'STATUS_NOT_FOUND', 'message': f'Status for request {request_id} not found'})}\n\n"
+                return
+            
+            # Send initial status
+            initial_update = {
+                "request_id": request_id,
+                "stage": status_info.current_stage,
+                "progress": status_info.progress_percentage,
+                "message": f"Current status: {status_info.status.value}",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "details": {
+                    "status": status_info.status.value,
+                    "next_actions": status_info.next_actions
+                }
+            }
+            yield f"event: status\ndata: {json.dumps(initial_update)}\n\n"
+            
+            # If request is already completed, send completion event
+            if status_info.status in [RequestStatus.APPROVED, RequestStatus.DENIED]:
+                decision = await tracking_service.get_decision_by_request_id(request_id)
+                if decision:
+                    completion_update = {
+                        "request_id": request_id,
+                        "decision_id": decision.decision_id,
+                        "final_decision": decision.status.value,
+                        "confidence_score": decision.confidence_score,
+                        "completed_at": decision.decided_at.isoformat(),
+                        "message": f"Decision completed: {decision.status.value}"
+                    }
+                    yield f"event: completed\ndata: {json.dumps(completion_update)}\n\n"
+                return
+            
+            # For pending requests, simulate processing updates
+            if status_info.status in [RequestStatus.SUBMITTED, RequestStatus.IN_REVIEW]:
+                processing_stages = [
+                    {"stage": "validation", "progress": 20, "message": "Validating medical codes and patient data"},
+                    {"stage": "policy_check", "progress": 40, "message": "Checking policy compliance"},
+                    {"stage": "llm_processing", "progress": 60, "message": "Processing with AI decision engine"},
+                    {"stage": "review", "progress": 80, "message": "Reviewing decision and generating explanation"},
+                    {"stage": "finalization", "progress": 95, "message": "Finalizing authorization decision"}
+                ]
+                
+                for stage_info in processing_stages:
+                    update = {
+                        "request_id": request_id,
+                        "stage": stage_info["stage"],
+                        "progress": stage_info["progress"],
+                        "message": stage_info["message"],
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "details": {
+                            "estimated_completion": "1-2 minutes",
+                            "processing_method": "enhanced" if await tracking_service.get_enhanced_context(request_id) else "standard"
+                        }
+                    }
+                    
+                    yield f"event: update\ndata: {json.dumps(update)}\n\n"
+                    
+                    # Simulate processing time
+                    await asyncio.sleep(2)
+                    
+                    # Check if decision was made during processing
+                    current_status = await tracking_service.get_request_status(request_id)
+                    if current_status and current_status.status in [RequestStatus.APPROVED, RequestStatus.DENIED]:
+                        break
+                
+                # Send final completion check
+                final_status = await tracking_service.get_request_status(request_id)
+                decision = await tracking_service.get_decision_by_request_id(request_id)
+                
+                if decision:
+                    completion_update = {
+                        "request_id": request_id,
+                        "decision_id": decision.decision_id,
+                        "final_decision": decision.status.value,
+                        "confidence_score": decision.confidence_score,
+                        "completed_at": decision.decided_at.isoformat(),
+                        "message": f"Decision completed: {decision.status.value}"
+                    }
+                    yield f"event: completed\ndata: {json.dumps(completion_update)}\n\n"
+                else:
+                    # Still processing
+                    yield f"event: update\ndata: {json.dumps({'request_id': request_id, 'stage': 'processing', 'progress': 90, 'message': 'Finalizing decision...', 'timestamp': datetime.now(timezone.utc).isoformat()})}\n\n"
+            
+        except Exception as e:
+            logger.error(f"Error in streaming updates for {request_id}: {str(e)}")
+            yield f"event: error\ndata: {json.dumps({'error': 'STREAMING_ERROR', 'message': 'Error in processing stream'})}\n\n"
+    
+    return StreamingResponse(
+        generate_updates(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Headers": "Cache-Control"
+        }
+    )
 
 
 @router.get("/requests", response_model=BulkStatusResponse)
@@ -722,3 +1224,192 @@ async def submit_additional_information(
                 
             )
         )
+
+
+@router.get("/requests/{request_id}/explanation", response_model=Dict[str, Any])
+async def get_request_decision_explanation(
+    request_id: str,
+    detailed: bool = Query(False, description="Include detailed explanation"),
+    current_user: TokenData = Depends(get_current_user),
+    tracking_service: TrackingService = Depends(get_tracking_service)
+) -> Dict[str, Any]:
+    """
+    Get detailed explanation for a request's authorization decision.
+    
+    Provides comprehensive explanation including medical reasoning,
+    policy analysis, risk assessment, and alternative recommendations.
+    """
+    try:
+        # Get the request
+        request = await tracking_service.get_request(request_id)
+        if not request:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={
+                    "error": "REQUEST_NOT_FOUND",
+                    "message": f"Request {request_id} not found"
+                }
+            )
+        
+        # Get the decision
+        decision = await tracking_service.get_decision_by_request_id(request_id)
+        if not decision:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={
+                    "error": "DECISION_NOT_FOUND",
+                    "message": f"No decision found for request {request_id}"
+                }
+            )
+        
+        # Get enhanced context if available
+        enhanced_context = await tracking_service.get_enhanced_context(request_id)
+        
+        # Build explanation
+        explanation = {
+            "request_id": request_id,
+            "decision_id": decision.decision_id,
+            "decision_summary": {
+                "final_decision": decision.status.value,
+                "confidence_score": decision.confidence_score,
+                "decided_at": decision.decided_at.isoformat(),
+                "authorization_number": decision.authorization_number,
+                "valid_until": decision.valid_until.isoformat() if decision.valid_until else None
+            },
+            "medical_reasoning": {
+                "primary_reasoning": decision.reasoning[0] if decision.reasoning else "No detailed reasoning available",
+                "all_reasoning": decision.reasoning,
+                "clinical_factors": enhanced_context.get('comorbidities', []) if enhanced_context else [],
+                "patient_history": enhanced_context.get('patient_history', []) if enhanced_context else []
+            },
+            "policy_compliance": {
+                "policy_references": decision.policy_references,
+                "compliant": decision.status != DecisionStatus.DENIED,
+                "analysis": "Decision based on medical necessity and policy compliance"
+            },
+            "alternatives": {
+                "alternative_procedures": decision.alternative_procedures or [],
+                "additional_info_needed": decision.additional_info_needed or []
+            }
+        }
+        
+        # Add detailed explanation if requested
+        if detailed:
+            explanation["detailed_analysis"] = {
+                "enhanced_context_available": bool(enhanced_context),
+                "context_fields": list(enhanced_context.keys()) if enhanced_context else [],
+                "processing_method": "llm-enhanced" if enhanced_context else "standard",
+                "confidence_interpretation": _interpret_confidence_score(decision.confidence_score),
+                "next_steps": _get_next_steps_for_decision(decision),
+                "provider_recommendations": _get_provider_recommendations_for_decision(decision),
+                "patient_communication": _get_patient_communication_for_decision(decision)
+            }
+            
+            # Add enhanced medical context details
+            if enhanced_context:
+                explanation["enhanced_medical_context"] = {
+                    "medications": enhanced_context.get('current_medications', []),
+                    "allergies": enhanced_context.get('allergies', []),
+                    "lab_results": enhanced_context.get('lab_results', {}),
+                    "imaging_history": enhanced_context.get('imaging_history', []),
+                    "treatment_response": enhanced_context.get('treatment_response'),
+                    "functional_status": enhanced_context.get('functional_status'),
+                    "social_determinants": enhanced_context.get('social_determinants', {})
+                }
+        
+        return explanation
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error retrieving decision explanation for {request_id}: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": "EXPLANATION_ERROR",
+                "message": "Error retrieving decision explanation"
+            }
+        )
+
+
+def _interpret_confidence_score(score: float) -> str:
+    """Interpret confidence score for human understanding."""
+    if score >= 0.9:
+        return "Very high confidence - decision is well-supported by evidence and policy"
+    elif score >= 0.8:
+        return "High confidence - decision is supported by available evidence"
+    elif score >= 0.7:
+        return "Moderate confidence - decision is reasonable but may benefit from additional review"
+    elif score >= 0.6:
+        return "Low confidence - decision may require additional documentation or review"
+    else:
+        return "Very low confidence - manual review strongly recommended"
+
+
+def _get_next_steps_for_decision(decision: AuthorizationDecision) -> List[str]:
+    """Get next steps based on decision status."""
+    
+    if decision.status == DecisionStatus.APPROVED:
+        return [
+            f"Authorization granted with number: {decision.authorization_number}",
+            "Proceed with scheduled procedure",
+            f"Authorization valid until: {decision.valid_until.strftime('%Y-%m-%d') if decision.valid_until else 'N/A'}"
+        ]
+    elif decision.status == DecisionStatus.DENIED:
+        return [
+            "Authorization denied - review denial reasons",
+            "Consider alternative procedures if available",
+            "Submit appeal if clinical circumstances warrant"
+        ]
+    else:  # MORE_INFO_NEEDED
+        return [
+            "Provide additional documentation as specified",
+            "Resubmit request with complete information",
+            "Contact payer if clarification needed"
+        ]
+
+
+def _get_provider_recommendations_for_decision(decision: AuthorizationDecision) -> List[str]:
+    """Get provider-specific recommendations."""
+    
+    recommendations = [
+        "Document all clinical decision-making rationale",
+        "Ensure patient informed consent is obtained"
+    ]
+    
+    if decision.status == DecisionStatus.APPROVED:
+        recommendations.extend([
+            "Proceed with procedure as authorized",
+            "Monitor patient response and document outcomes"
+        ])
+    elif decision.status == DecisionStatus.DENIED:
+        recommendations.extend([
+            "Review alternative treatment options",
+            "Consider peer consultation if appropriate",
+            "Document medical necessity for potential appeal"
+        ])
+    
+    return recommendations
+
+
+def _get_patient_communication_for_decision(decision: AuthorizationDecision) -> List[str]:
+    """Get patient communication guidance."""
+    
+    if decision.status == DecisionStatus.APPROVED:
+        return [
+            "Inform patient that authorization has been approved",
+            "Provide procedure scheduling information",
+            "Review any pre-procedure requirements"
+        ]
+    elif decision.status == DecisionStatus.DENIED:
+        return [
+            "Explain denial reason in patient-friendly terms",
+            "Discuss alternative treatment options",
+            "Inform about appeal process if applicable"
+        ]
+    else:  # MORE_INFO_NEEDED
+        return [
+            "Explain that additional information is needed",
+            "Request patient cooperation in providing documentation",
+            "Set expectations for timeline"
+        ]

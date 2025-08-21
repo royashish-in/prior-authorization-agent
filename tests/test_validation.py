@@ -6,13 +6,14 @@ business rules, and error handling.
 """
 
 import pytest
+from src.services.validation import ValidationResult
 from datetime import datetime, timezone
 
 from src.services.validation import ValidationService, ValidationError, ValidationResult
 from src.models.authorization import AuthorizationRequest
 from src.models.patient import PatientDemographics
 from src.models.medical_codes import ICD10Code, CPTCode, HCPCSCode
-from src.models.enums import RequestStatus, UrgencyLevel, ProcedureType, Gender
+from src.models.enums import DecisionStatus, UrgencyLevel, ProcedureType, RequestStatus
 
 
 class TestValidationService:
@@ -51,16 +52,36 @@ class TestValidationService:
         )
     
     @pytest.mark.asyncio
+
+    
     async def test_validate_valid_request_success(self, validation_service, valid_request):
-        """Test validation of a completely valid request."""
+        """
+        Test validation of a completely valid authorization request.
+        
+        This test verifies that a well-formed authorization request with valid
+        patient demographics, medical codes, and clinical information passes
+        all validation checks without errors.
+        
+        Expected behavior:
+        - ValidationResult should be returned
+        - is_valid should be True
+        - No validation errors should be present
+        - Processing time should be recorded and positive
+        """
         result = await validation_service.validate_request(valid_request)
         
-        assert isinstance(result, ValidationResult)
-        assert result.is_valid is True
-        assert len(result.errors) == 0
-        assert result.processing_time_ms > 0
+        assert isinstance(result, ValidationResult), \
+            f"Expected ValidationResult instance, got: {type(result)}"
+        assert result.is_valid is True, \
+            f"Valid request should pass validation, got is_valid={result.is_valid}, errors={result.errors}"
+        assert len(result.errors) == 0, \
+            f"Valid request should have no errors, got: {result.errors}"
+        assert result.processing_time_ms > 0, \
+            f"Processing time should be positive, got: {result.processing_time_ms}"
     
     @pytest.mark.asyncio
+
+    
     async def test_validate_request_with_warnings(self, validation_service, valid_request):
         """Test validation that produces warnings but is still valid."""
         # Modify request to trigger warnings
@@ -88,6 +109,8 @@ class TestMedicalCodeValidation:
         return ValidationService()
     
     @pytest.mark.asyncio
+
+    
     async def test_validate_valid_icd10_codes(self, validation_service):
         """Test validation of valid ICD-10 codes."""
         valid_codes = [
@@ -101,20 +124,42 @@ class TestMedicalCodeValidation:
             assert len(errors) == 0
     
     @pytest.mark.asyncio
+
+    
     async def test_validate_invalid_icd10_codes(self, validation_service):
-        """Test validation of invalid ICD-10 codes."""
+        """
+        Test validation of invalid ICD-10 codes that should fail business validation.
+        
+        This test verifies that ICD-10 codes with valid format but invalid content
+        (non-existent codes or mismatched descriptions) are properly rejected by
+        the business validation layer.
+        
+        Expected behavior:
+        - Validation errors should be generated for invalid codes
+        - Error messages should indicate the specific validation failure
+        - Both non-existent codes and description mismatches should be caught
+        """
         # Test codes that pass Pydantic validation but fail business validation
         invalid_codes = [
             ICD10Code(code="Z99.999", description="Non-existent code"),  # Valid format, invalid code
             ICD10Code(code="M25.511", description="Wrong description")  # Valid code, wrong description
         ]
         
-        for code in invalid_codes:
+        for i, code in enumerate(invalid_codes):
             errors = await validation_service._validate_icd10_code(code, "test_field")
-            assert len(errors) > 0
-            assert any("not recognized" in error.message or "does not match" in error.message for error in errors)
+            assert len(errors) > 0, \
+                f"Invalid ICD-10 code {code.code} should generate validation errors"
+            
+            error_messages = [error.message for error in errors]
+            has_recognition_error = any("not recognized" in msg for msg in error_messages)
+            has_description_error = any("does not match" in msg for msg in error_messages)
+            
+            assert has_recognition_error or has_description_error, \
+                f"Error messages should indicate recognition or description issues, got: {error_messages}"
     
     @pytest.mark.asyncio
+
+    
     async def test_validate_valid_cpt_codes(self, validation_service):
         """Test validation of valid CPT codes."""
         valid_codes = [
@@ -128,6 +173,8 @@ class TestMedicalCodeValidation:
             assert len(errors) == 0
     
     @pytest.mark.asyncio
+
+    
     async def test_validate_invalid_cpt_codes(self, validation_service):
         """Test validation of invalid CPT codes."""
         # Test codes that pass Pydantic validation but fail business validation
@@ -142,6 +189,8 @@ class TestMedicalCodeValidation:
             assert any("not recognized" in error.message or "does not match" in error.message for error in errors)
     
     @pytest.mark.asyncio
+
+    
     async def test_validate_hcpcs_codes(self, validation_service):
         """Test validation of HCPCS codes."""
         valid_code = HCPCSCode(code="A0425", description="Ground mileage, per statute mile")
@@ -156,6 +205,8 @@ class TestMedicalCodeValidation:
         assert len(errors) > 0
     
     @pytest.mark.asyncio
+
+    
     async def test_code_suggestion_functionality(self, validation_service):
         """Test that code suggestions are provided for invalid codes."""
         invalid_icd10 = ICD10Code(code="M25.999", description="Invalid shoulder code")
@@ -201,29 +252,50 @@ class TestBusinessRuleValidation:
         )
     
     @pytest.mark.asyncio
+
+    
     async def test_clinical_notes_required_for_mri(self, validation_service, base_request):
-        """Test that clinical notes are required for MRI procedures."""
+        """
+        Test that clinical notes are required and adequate for MRI procedures.
+        
+        This test verifies the business rule that MRI procedures require detailed
+        clinical notes to support medical necessity. It tests three scenarios:
+        missing notes, insufficient notes, and adequate notes.
+        
+        Expected behavior:
+        - Missing clinical notes should generate validation error
+        - Brief clinical notes should generate validation error
+        - Adequate clinical notes should pass validation
+        - Error messages should clearly indicate the requirement
+        """
         # Request without clinical notes should fail
         base_request.clinical_notes = None
         
         errors = await validation_service._validate_clinical_notes_requirement(base_request)
-        assert len(errors) > 0
-        assert "clinical notes are required" in errors[0].message.lower()
+        assert len(errors) > 0, \
+            "MRI requests without clinical notes should generate validation errors"
+        assert "clinical notes are required" in errors[0].message.lower(), \
+            f"Error message should indicate clinical notes requirement, got: {errors[0].message}"
         
         # Request with too brief clinical notes should fail
         base_request.clinical_notes = "Pain"  # Too short
         
         errors = await validation_service._validate_clinical_notes_requirement(base_request)
-        assert len(errors) > 0
-        assert "too brief" in errors[0].message.lower()
+        assert len(errors) > 0, \
+            "MRI requests with brief clinical notes should generate validation errors"
+        assert "too brief" in errors[0].message.lower(), \
+            f"Error message should indicate notes are too brief, got: {errors[0].message}"
         
         # Request with adequate clinical notes should pass
         base_request.clinical_notes = "Patient reports persistent shoulder pain for 6 weeks following sports injury."
         
         errors = await validation_service._validate_clinical_notes_requirement(base_request)
-        assert len(errors) == 0
+        assert len(errors) == 0, \
+            f"MRI requests with adequate clinical notes should pass validation, got errors: {errors}"
     
     @pytest.mark.asyncio
+
+    
     async def test_age_appropriateness_validation(self, validation_service, base_request):
         """Test age appropriateness validation for different procedures."""
         # Young patient with brain MRI should generate warning
@@ -245,6 +317,8 @@ class TestBusinessRuleValidation:
         assert any("over 80 years" in warning for warning in warnings)
     
     @pytest.mark.asyncio
+
+    
     async def test_urgency_level_validation(self, validation_service, base_request):
         """Test urgency level validation."""
         # Emergent urgency should generate warning
@@ -292,6 +366,8 @@ class TestFieldRelationshipValidation:
         )
     
     @pytest.mark.asyncio
+
+    
     async def test_diagnosis_procedure_relationship_valid(self, validation_service, base_request):
         """Test valid diagnosis-procedure relationships."""
         # Shoulder diagnosis with shoulder MRI should be valid
@@ -302,6 +378,8 @@ class TestFieldRelationshipValidation:
         assert len(errors) == 0
     
     @pytest.mark.asyncio
+
+    
     async def test_diagnosis_procedure_relationship_invalid(self, validation_service, base_request):
         """Test invalid diagnosis-procedure relationships."""
         # Non-shoulder diagnosis with shoulder MRI should generate error
@@ -314,6 +392,8 @@ class TestFieldRelationshipValidation:
                   for error in errors)
     
     @pytest.mark.asyncio
+
+    
     async def test_multiple_procedures_warning(self, validation_service, base_request):
         """Test warning for multiple MRI procedures."""
         # Multiple MRI procedures should generate warning
@@ -375,6 +455,8 @@ class TestValidationErrorHandling:
             assert "validation service encountered an unexpected error" in result.errors[0].message.lower()
     
     @pytest.mark.asyncio
+
+    
     async def test_validation_performance(self, validation_service):
         """Test that validation completes within reasonable time."""
         # Create a complex request

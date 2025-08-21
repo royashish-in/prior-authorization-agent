@@ -25,7 +25,7 @@ from src.services.conflict_resolution import (
     PolicyConflict, ConflictResolution, DeploymentPlan
 )
 from src.audit.logger import AuditLogger
-from src.models.enums import UserRole
+from src.auth.models import UserRole
 
 
 logger = logging.getLogger(__name__)

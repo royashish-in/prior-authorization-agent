@@ -15,7 +15,7 @@ from fastapi.testclient import TestClient
 
 from src.main import app
 from src.services.validation import ValidationResult
-from tests.test_data_generator import TestDataGenerator
+from tests.utils.data_generator import DataGenerator
 
 
 class TestPerformanceRequirements:
@@ -24,11 +24,11 @@ class TestPerformanceRequirements:
     def setup_method(self):
         """Set up test fixtures."""
         self.client = TestClient(app)
-        self.data_generator = TestDataGenerator()
+        self.data_generator = DataGenerator()
     
     @pytest.mark.performance
     def test_request_processing_time_requirement(self):
-        """Test that 95% of requests are processed within 2 minutes."""
+    """Test that 95% of requests are processed within 2 minutes."""
         request_count = 100
         processing_times = []
         
@@ -83,7 +83,7 @@ class TestPerformanceRequirements:
     
     @pytest.mark.performance
     def test_validation_performance_requirement(self):
-        """Test that data validation completes within 5 seconds."""
+    """Test that data validation completes within 5 seconds."""
         validation_times = []
         
         # Generate test data with various complexity levels
@@ -121,11 +121,33 @@ class TestPerformanceRequirements:
     @pytest.mark.performance
     @pytest.mark.slow
     def test_concurrent_request_performance(self):
-        """Test performance under concurrent load."""
-        concurrent_requests = 50
+    """
+        Test concurrent request performance.
         
-        def submit_request():
-            """Submit a single request and return processing time."""
+        This test verifies that the API endpoint correctly handles requests,
+        validates input data, enforces security controls, and returns
+        appropriate responses in the expected format.
+        
+        Test Scenarios:
+        - Valid requests with proper authentication and authorization
+        - Invalid requests with malformed data or missing fields
+        - Security scenarios including unauthorized access attempts
+        - Error conditions and exception handling
+        
+        Expected Behavior:
+        - Valid requests should return successful responses with correct data
+        - Invalid requests should return appropriate HTTP status codes
+        - Security controls should prevent unauthorized access
+        - Error responses should be informative but not expose sensitive data
+        
+        Security Requirements:
+        - All requests must be properly authenticated
+        - PHI data must be encrypted in transit and at rest
+        - Audit logging must capture all access attempts
+        
+        PHI Compliance:
+        Test data uses synthetic patient information only.
+        """
             request = self.data_generator.generate_authorization_request()
             request_data = self._convert_request_to_api_format(request)
             
@@ -194,23 +216,44 @@ class TestPerformanceRequirements:
         }
 
 
-class TestLoadTesting:
+        class TestLoadTesting:
     """Load testing for system scalability."""
     
     def setup_method(self):
         """Set up test fixtures."""
         self.client = TestClient(app)
-        self.data_generator = TestDataGenerator()
+        self.data_generator = DataGenerator()
     
-    @pytest.mark.performance
-    @pytest.mark.slow
-    def test_1000_concurrent_requests_requirement(self):
-        """Test system can handle 1000+ concurrent requests."""
-        concurrent_requests = 1000
-        batch_size = 100  # Process in batches to avoid overwhelming test environment
+        @pytest.mark.performance
+        @pytest.mark.slow
+        def test_1000_concurrent_requests_requirement(self):
+    """
+        Test 1000 concurrent requests requirement.
         
-        def process_batch(batch_requests):
-            """Process a batch of requests."""
+        This test verifies that the API endpoint correctly handles requests,
+        validates input data, enforces security controls, and returns
+        appropriate responses in the expected format.
+        
+        Test Scenarios:
+        - Valid requests with proper authentication and authorization
+        - Invalid requests with malformed data or missing fields
+        - Security scenarios including unauthorized access attempts
+        - Error conditions and exception handling
+        
+        Expected Behavior:
+        - Valid requests should return successful responses with correct data
+        - Invalid requests should return appropriate HTTP status codes
+        - Security controls should prevent unauthorized access
+        - Error responses should be informative but not expose sensitive data
+        
+        Security Requirements:
+        - All requests must be properly authenticated
+        - PHI data must be encrypted in transit and at rest
+        - Audit logging must capture all access attempts
+        
+        PHI Compliance:
+        Test data uses synthetic patient information only.
+        """
             batch_results = []
             
             with ThreadPoolExecutor(max_workers=20) as executor:
@@ -291,9 +334,9 @@ class TestLoadTesting:
             assert average_time < 20.0, f"Average time under load ({average_time:.3f}s) too high"
             assert percentile_95 < 60.0, f"95th percentile under load ({percentile_95:.3f}s) too high"
     
-    @pytest.mark.performance
-    def test_stress_testing_behavior(self):
-        """Test system behavior under extreme stress conditions."""
+        @pytest.mark.performance
+        def test_stress_testing_behavior(self):
+    """Test system behavior under extreme stress conditions."""
         stress_requests = 200
         max_workers = 50  # High concurrency
         
@@ -321,7 +364,7 @@ class TestLoadTesting:
                     'error': str(e)
                 }
         
-        with patch('src.services.validation.ValidationService.validate_request') as mock_validate, \
+            with patch('src.services.validation.ValidationService.validate_request') as mock_validate, \
              patch('src.services.tracking.TrackingService.store_request') as mock_store:
             
             mock_validate.return_value = ValidationResult(
@@ -346,31 +389,31 @@ class TestLoadTesting:
                             'error': str(e)
                         })
         
-        # Analyze stress test results
-        success_rate = sum(1 for r in results if r['success']) / len(results)
-        error_rate = sum(1 for r in results if not r['success']) / len(results)
+            # Analyze stress test results
+            success_rate = sum(1 for r in results if r['success']) / len(results)
+            error_rate = sum(1 for r in results if not r['success']) / len(results)
         
-        status_codes = {}
-        for result in results:
+            status_codes = {}
+            for result in results:
             code = result['status_code']
             status_codes[code] = status_codes.get(code, 0) + 1
         
-        print(f"Stress test results for {stress_requests} requests:")
-        print(f"Success rate: {success_rate:.2%}")
-        print(f"Error rate: {error_rate:.2%}")
-        print(f"Status code distribution: {status_codes}")
+            print(f"Stress test results for {stress_requests} requests:")
+            print(f"Success rate: {success_rate:.2%}")
+            print(f"Error rate: {error_rate:.2%}")
+            print(f"Status code distribution: {status_codes}")
         
-        # Stress test assertions - system should degrade gracefully
-        assert success_rate >= 0.70, f"Success rate ({success_rate:.2%}) too low under stress"
-        assert error_rate <= 0.30, f"Error rate ({error_rate:.2%}) too high under stress"
+            # Stress test assertions - system should degrade gracefully
+            assert success_rate >= 0.70, f"Success rate ({success_rate:.2%}) too low under stress"
+            assert error_rate <= 0.30, f"Error rate ({error_rate:.2%}) too high under stress"
         
-        # System should return appropriate error codes under stress
-        if 429 in status_codes or 503 in status_codes:
+            # System should return appropriate error codes under stress
+            if 429 in status_codes or 503 in status_codes:
             print("System correctly returned rate limiting or service unavailable responses")
     
-    @pytest.mark.performance
-    def test_auto_scaling_behavior_validation(self):
-        """Test that system behavior is consistent with auto-scaling expectations."""
+            @pytest.mark.performance
+            def test_auto_scaling_behavior_validation(self):
+    """Test that system behavior is consistent with auto-scaling expectations."""
         # This test validates that the system can handle varying loads
         # which would trigger auto-scaling in production
         
@@ -468,7 +511,7 @@ class TestLoadTesting:
                 'error': str(e)
             }
     
-    def _convert_request_to_api_format(self, request) -> dict:
+        def _convert_request_to_api_format(self, request) -> dict:
         """Convert AuthorizationRequest to API format."""
         return {
             "provider_id": request.provider_id,
@@ -499,11 +542,11 @@ class TestResponseTimeValidation:
     def setup_method(self):
         """Set up test fixtures."""
         self.client = TestClient(app)
-        self.data_generator = TestDataGenerator()
+        self.data_generator = DataGenerator()
     
     @pytest.mark.performance
     def test_2_minute_processing_target_validation(self):
-        """Validate that 95% of requests meet the 2-minute processing target."""
+    """Validate that 95% of requests meet the 2-minute processing target."""
         test_scenarios = [
             {"type": "routine", "count": 50},
             {"type": "urgent", "count": 30},

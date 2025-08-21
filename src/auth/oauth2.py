@@ -9,6 +9,10 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
+# Import bcrypt compatibility fixes first
+from src.core.bcrypt_compat import initialize_bcrypt_compat
+initialize_bcrypt_compat()
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt

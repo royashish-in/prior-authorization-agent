@@ -29,6 +29,7 @@ class RequestStatusInfo:
     current_stage: str
     progress_percentage: int
     next_actions: Optional[List[str]]
+    rationale: Optional[str] = None
 
 
 @dataclass
@@ -123,14 +124,18 @@ class TrackingService:
             # Store the decision (in a real implementation, this would go to database)
             if not hasattr(self, '_decisions'):
                 self._decisions = {}
+            if not hasattr(self, '_decisions_by_request'):
+                self._decisions_by_request = {}
             
             self._decisions[decision.decision_id] = decision
+            self._decisions_by_request[decision.request_id] = decision
             
             self.logger.info(
                 "Decision stored successfully",
                 decision_id=decision.decision_id,
                 request_id=decision.request_id,
-                status=decision.status.value
+                status=decision.status.value,
+                reasoning_preview=decision.reasoning[0][:100] if decision.reasoning else "No reasoning"
             )
             
         except Exception as e:
@@ -142,6 +147,70 @@ class TrackingService:
                 exc_info=True,
             )
             raise
+
+    async def store_enhanced_context(self, request_id: str, enhanced_context: Dict[str, Any]) -> None:
+        """
+        Store enhanced medical context for a request.
+
+        Args:
+            request_id: Unique request identifier
+            enhanced_context: Enhanced medical context data
+        """
+        try:
+            # Store enhanced context (in a real implementation, this would go to database)
+            if not hasattr(self, '_enhanced_contexts'):
+                self._enhanced_contexts = {}
+            
+            self._enhanced_contexts[request_id] = enhanced_context
+            
+            self.logger.info(
+                "Enhanced context stored successfully",
+                request_id=request_id,
+                context_fields=list(enhanced_context.keys())
+            )
+            
+        except Exception as e:
+            self.logger.error(
+                "Error storing enhanced context",
+                request_id=request_id,
+                error=str(e),
+                exc_info=True,
+            )
+            raise
+
+    async def get_enhanced_context(self, request_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Retrieve enhanced medical context for a request.
+
+        Args:
+            request_id: Unique request identifier
+
+        Returns:
+            Enhanced context data or None if not found
+        """
+        try:
+            if not hasattr(self, '_enhanced_contexts'):
+                self._enhanced_contexts = {}
+            
+            context = self._enhanced_contexts.get(request_id)
+            
+            if context:
+                self.logger.info(
+                    "Enhanced context retrieved successfully",
+                    request_id=request_id,
+                    context_fields=list(context.keys())
+                )
+            
+            return context
+            
+        except Exception as e:
+            self.logger.error(
+                "Error retrieving enhanced context",
+                request_id=request_id,
+                error=str(e),
+                exc_info=True,
+            )
+            return None
 
     async def update_request_status(self, request_id: str, new_status: RequestStatus) -> None:
         """
@@ -233,6 +302,113 @@ class TrackingService:
             )
             return None
 
+    async def get_decision_by_request_id(self, request_id: str) -> Optional['AuthorizationDecision']:
+        """
+        Retrieve a decision by request ID (alias for compatibility).
+
+        Args:
+            request_id: Authorization request identifier
+
+        Returns:
+            AuthorizationDecision if found, None otherwise
+        """
+        return await self.get_decision_by_request(request_id)
+
+    async def get_request(self, request_id: str) -> Optional[AuthorizationRequest]:
+        """
+        Retrieve a request by its ID.
+
+        Args:
+            request_id: Unique request identifier
+
+        Returns:
+            AuthorizationRequest if found, None otherwise
+        """
+        try:
+            request = self._requests.get(request_id)
+            
+            if request:
+                self.logger.info(
+                    "Request retrieved successfully",
+                    request_id=request_id,
+                    provider_id=request.provider_id
+                )
+            
+            return request
+            
+        except Exception as e:
+            self.logger.error(
+                "Error retrieving request",
+                request_id=request_id,
+                error=str(e),
+                exc_info=True,
+            )
+            return None
+
+    async def store_webhook_preferences(self, request_id: str, webhook_events: List[str]) -> None:
+        """
+        Store webhook event preferences for a request.
+
+        Args:
+            request_id: Unique request identifier
+            webhook_events: List of webhook events to trigger
+        """
+        try:
+            # Store webhook preferences (in a real implementation, this would go to database)
+            if not hasattr(self, '_webhook_preferences'):
+                self._webhook_preferences = {}
+            
+            self._webhook_preferences[request_id] = webhook_events
+            
+            self.logger.info(
+                "Webhook preferences stored successfully",
+                request_id=request_id,
+                events=webhook_events
+            )
+            
+        except Exception as e:
+            self.logger.error(
+                "Error storing webhook preferences",
+                request_id=request_id,
+                error=str(e),
+                exc_info=True,
+            )
+            raise
+
+    async def get_webhook_preferences(self, request_id: str) -> Optional[List[str]]:
+        """
+        Retrieve webhook event preferences for a request.
+
+        Args:
+            request_id: Unique request identifier
+
+        Returns:
+            List of webhook events or None if not found
+        """
+        try:
+            if not hasattr(self, '_webhook_preferences'):
+                self._webhook_preferences = {}
+            
+            preferences = self._webhook_preferences.get(request_id)
+            
+            if preferences:
+                self.logger.info(
+                    "Webhook preferences retrieved successfully",
+                    request_id=request_id,
+                    events=preferences
+                )
+            
+            return preferences
+            
+        except Exception as e:
+            self.logger.error(
+                "Error retrieving webhook preferences",
+                request_id=request_id,
+                error=str(e),
+                exc_info=True,
+            )
+            return None
+
     async def get_decision_by_request(self, request_id: str) -> Optional['AuthorizationDecision']:
         """
         Retrieve a decision by request ID.
@@ -244,22 +420,25 @@ class TrackingService:
             AuthorizationDecision if found, None otherwise
         """
         try:
-            if not hasattr(self, '_decisions'):
-                self._decisions = {}
+            if not hasattr(self, '_decisions_by_request'):
+                self._decisions_by_request = {}
             
-            # Find decision by request_id
-            for decision in self._decisions.values():
-                if decision.request_id == request_id:
-                    self.logger.info(
-                        "Decision found for request",
-                        decision_id=decision.decision_id,
-                        request_id=request_id
-                    )
-                    return decision
+            # Direct lookup by request_id
+            decision = self._decisions_by_request.get(request_id)
+            
+            if decision:
+                self.logger.info(
+                    "Decision found for request",
+                    decision_id=decision.decision_id,
+                    request_id=request_id,
+                    reasoning_preview=decision.reasoning[0][:100] if decision.reasoning else "No reasoning"
+                )
+                return decision
             
             self.logger.info(
                 "No decision found for request",
-                request_id=request_id
+                request_id=request_id,
+                available_requests=list(self._decisions_by_request.keys())
             )
             return None
             
@@ -350,6 +529,14 @@ class TrackingService:
             for request in paginated_requests:
                 status_info = await self.get_request_status(request.request_id)
                 if status_info:
+                    # Add rationale from decision if available
+                    decision = await self.get_decision_by_request_id(request.request_id)
+                    self.logger.info(f"Looking for decision for request {request.request_id}: found={decision is not None}")
+                    if decision and decision.reasoning:
+                        status_info.rationale = decision.reasoning[0]
+                        self.logger.info(f"Set rationale for {request.request_id}: {status_info.rationale[:100]}...")
+                    else:
+                        status_info.rationale = "Detailed medical rationale available via decision explanation endpoint"
                     status_list.append(status_info)
 
             # Calculate status summary

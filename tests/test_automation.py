@@ -15,7 +15,7 @@ from typing import Dict, List, Any, Optional
 import pytest
 
 
-class TestAutomation:
+class Automation:
     """Automated testing utilities and CI/CD integration."""
     
     def __init__(self, project_root: Optional[str] = None):
@@ -346,7 +346,7 @@ class ContinuousIntegration:
     
     def __init__(self):
         """Initialize CI utilities."""
-        self.automation = TestAutomation()
+        self.automation = Automation()
     
     def run_ci_pipeline(self, include_performance: bool = False) -> bool:
         """Run complete CI pipeline."""
@@ -512,7 +512,7 @@ def main():
     
     args = parser.parse_args()
     
-    automation = TestAutomation()
+    automation = Automation()
     ci = ContinuousIntegration()
     
     if args.unit:

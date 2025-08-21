@@ -180,6 +180,131 @@ class PolicyException(StandardHTTPException):
         )
 
 
+class DatabaseError(StandardHTTPException):
+    """Exception for database-related errors."""
+    
+    def __init__(
+        self,
+        message: str,
+        operation: Optional[str] = None,
+        table: Optional[str] = None,
+        request_id: Optional[str] = None
+    ):
+        details = {}
+        if operation:
+            details["operation"] = operation
+        if table:
+            details["table"] = table
+        
+        super().__init__(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            message=message,
+            error_code="DATABASE_ERROR",
+            details=details,
+            request_id=request_id
+        )
+
+
+class ValidationError(StandardHTTPException):
+    """Exception for data validation errors."""
+    
+    def __init__(
+        self,
+        message: str,
+        field: Optional[str] = None,
+        value: Optional[Any] = None,
+        request_id: Optional[str] = None
+    ):
+        details = {}
+        if field:
+            details["field"] = field
+        if value is not None:
+            details["value"] = str(value)
+        
+        super().__init__(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            message=message,
+            error_code="VALIDATION_ERROR",
+            details=details,
+            request_id=request_id
+        )
+
+
+class NotFoundError(StandardHTTPException):
+    """Exception for resource not found errors."""
+    
+    def __init__(
+        self,
+        message: str,
+        resource_type: Optional[str] = None,
+        resource_id: Optional[str] = None,
+        request_id: Optional[str] = None
+    ):
+        details = {}
+        if resource_type:
+            details["resource_type"] = resource_type
+        if resource_id:
+            details["resource_id"] = resource_id
+        
+        super().__init__(
+            status_code=status.HTTP_404_NOT_FOUND,
+            message=message,
+            error_code="NOT_FOUND",
+            details=details,
+            request_id=request_id
+        )
+
+
+class DuplicateError(StandardHTTPException):
+    """Exception for duplicate resource errors."""
+    
+    def __init__(
+        self,
+        message: str,
+        resource_type: Optional[str] = None,
+        resource_id: Optional[str] = None,
+        request_id: Optional[str] = None
+    ):
+        details = {}
+        if resource_type:
+            details["resource_type"] = resource_type
+        if resource_id:
+            details["resource_id"] = resource_id
+        
+        super().__init__(
+            status_code=status.HTTP_409_CONFLICT,
+            message=message,
+            error_code="DUPLICATE_RESOURCE",
+            details=details,
+            request_id=request_id
+        )
+
+
+class LLMServiceException(StandardHTTPException):
+    """Exception for LLM service-related errors."""
+    
+    def __init__(
+        self,
+        message: str,
+        service_name: Optional[str] = None,
+        model_name: Optional[str] = None,
+        request_id: Optional[str] = None
+    ):
+        details = {}
+        if service_name:
+            details["service_name"] = service_name
+        if model_name:
+            details["model_name"] = model_name
+        
+        super().__init__(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            message=message,
+            error_code="LLM_SERVICE_ERROR",
+            details=details,
+            request_id=request_id
+        )
+
+
 async def custom_http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
     """
     Custom HTTP exception handler that ensures consistent error response format.

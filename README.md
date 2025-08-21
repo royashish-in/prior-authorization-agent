@@ -40,17 +40,34 @@ cp .env.example .env
 # Edit .env with your configuration
 ```
 
-5. Run the application:
+### Starting the Application
+
+**Backend API Server:**
 ```bash
+# Development mode (recommended)
+python -m uvicorn src.main:app --reload --port 8000
+
+# Or using the main module
 python -m src.main
 ```
 
-The API will be available at `http://localhost:8000`
+**Frontend Dashboard:**
+```bash
+# In a new terminal window
+python frontend/serve.py
+```
 
-### API Documentation
+### Access Points
 
-- Swagger UI: `http://localhost:8000/docs`
-- ReDoc: `http://localhost:8000/redoc`
+**Backend API:**
+- Main API: `http://localhost:8000`
+- API Documentation: `http://localhost:8000/docs` (Swagger UI)
+- Alternative Docs: `http://localhost:8000/redoc`
+- Health Check: `http://localhost:8000/api/v1/health`
+
+**Frontend Dashboard:**
+- Dashboard: `http://localhost:8080/simple-dashboard.html`
+- Login: `provider1` / `provider123` or `admin1` / `admin123`
 
 ## Health Checks
 
@@ -87,11 +104,17 @@ mypy src/
 ```
 ├── src/                    # Application source code
 │   ├── api/               # API endpoints and routers
+│   ├── auth/              # Authentication and authorization
 │   ├── core/              # Core configuration and utilities
+│   ├── database/          # Database models and connections
+│   ├── models/            # Pydantic models
+│   ├── services/          # Business logic services
 │   └── main.py            # Application entry point
 ├── tests/                 # Test suite
 ├── docs/                  # Documentation
-├── config/                # Configuration files
+├── frontend/              # Web dashboard
+├── deployment/            # Docker and Kubernetes configs
+├── scripts/               # Utility scripts
 ├── requirements.txt       # Python dependencies
 └── .env.example          # Environment variables template
 ```

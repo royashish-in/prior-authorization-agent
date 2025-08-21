@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from typing import Dict, Any
 
 from fastapi import APIRouter, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from src.core.config import get_settings
 from src.core.logging import get_logger
@@ -26,6 +26,20 @@ class HealthResponse(BaseModel):
     version: str
     environment: str
     checks: Dict[str, Any]
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "status": "healthy",
+                "timestamp": "2024-01-24T10:30:00Z",
+                "version": "1.0.0",
+                "environment": "production",
+                "checks": {
+                    "database": "healthy"
+                }
+            }
+        }
+    )
 
 
 class DetailedHealthResponse(BaseModel):
@@ -36,6 +50,32 @@ class DetailedHealthResponse(BaseModel):
     environment: str
     uptime_seconds: float
     checks: Dict[str, Dict[str, Any]]
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "status": "healthy",
+                "timestamp": "2024-01-24T10:30:00Z",
+                "version": "1.0.0",
+                "environment": "production",
+                "uptime_seconds": 3600.5,
+                "checks": {
+                    "database": {
+                        "status": "healthy",
+                        "response_time_ms": 5,
+                        "details": "Database connection successful"
+                    },
+                    "external_services": {
+                        "cms_api": {
+                            "status": "healthy",
+                            "response_time_ms": 150,
+                            "details": "CMS API accessible"
+                        }
+                    }
+                }
+            }
+        }
+    )
 
 
 # Track application start time for uptime calculation

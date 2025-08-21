@@ -1,0 +1,969 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Configuration Management - Prior Authorization Agent</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #f5f5f5;
+            color: #333;
+            line-height: 1.6;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1rem 2rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .header h1 {
+            font-size: 1.8rem;
+            font-weight: 600;
+        }
+        
+        .header p {
+            opacity: 0.9;
+            margin-top: 0.5rem;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        .nav-tabs {
+            display: flex;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+            overflow: hidden;
+        }
+        
+        .nav-tab {
+            flex: 1;
+            padding: 1rem;
+            text-align: center;
+            background: white;
+            border: none;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: #666;
+            transition: all 0.3s ease;
+        }
+        
+        .nav-tab:hover {
+            background: #f8f9fa;
+        }
+        
+        .nav-tab.active {
+            background: #667eea;
+            color: white;
+        }
+        
+        .tab-content {
+            display: none;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            padding: 2rem;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .section-title {
+            font-size: 1.4rem;
+            font-weight: 600;
+            margin-bottom: 1.5rem;
+            color: #333;
+        }
+        
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+        
+        .form-label {
+            display: block;
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+            color: #555;
+        }
+        
+        .form-input, .form-select, .form-textarea {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid #e1e5e9;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            transition: border-color 0.3s ease;
+        }
+        
+        .form-input:focus, .form-select:focus, .form-textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .form-textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+        
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+        
+        .form-row-3 {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 1rem;
+        }
+        
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+            text-align: center;
+        }
+        
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #5a6fd8;
+            transform: translateY(-1px);
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+        
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+        
+        .btn-success:hover {
+            background: #218838;
+        }
+        
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+        
+        .btn-danger:hover {
+            background: #c82333;
+        }
+        
+        .config-list {
+            margin-top: 2rem;
+        }
+        
+        .config-item {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 6px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            transition: all 0.3s ease;
+        }
+        
+        .config-item:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        
+        .config-header {
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+        
+        .config-title {
+            font-weight: 600;
+            font-size: 1.1rem;
+            color: #333;
+        }
+        
+        .config-type {
+            background: #667eea;
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+        
+        .config-status {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+        
+        .status-badge {
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        
+        .status-active {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status-inactive {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .config-actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+        
+        .alert {
+            padding: 1rem;
+            border-radius: 6px;
+            margin-bottom: 1rem;
+        }
+        
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .alert-warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: #666;
+        }
+        
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        
+        .metric-card {
+            background: white;
+            border: 1px solid #e9ecef;
+            border-radius: 6px;
+            padding: 1.5rem;
+            text-align: center;
+        }
+        
+        .metric-value {
+            font-size: 2rem;
+            font-weight: 600;
+            color: #667eea;
+            margin-bottom: 0.5rem;
+        }
+        
+        .metric-label {
+            color: #666;
+            font-size: 0.9rem;
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+            
+            .form-row, .form-row-3 {
+                grid-template-columns: 1fr;
+            }
+            
+            .nav-tabs {
+                flex-direction: column;
+            }
+            
+            .config-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 0.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>AI Configuration Management</h1>
+        <p>Manage LLM models, decision thresholds, escalation rules, and clinical guidelines</p>
+    </div>
+    
+    <div class="container">
+        <div class="nav-tabs">
+            <button class="nav-tab active" onclick="showTab('llm-models')">LLM Models</button>
+            <button class="nav-tab" onclick="showTab('thresholds')">Decision Thresholds</button>
+            <button class="nav-tab" onclick="showTab('escalation')">Escalation Rules</button>
+            <button class="nav-tab" onclick="showTab('guidelines')">Clinical Guidelines</button>
+            <button class="nav-tab" onclick="showTab('feedback')">Feedback Rules</button>
+            <button class="nav-tab" onclick="showTab('performance')">Performance</button>
+        </div>
+        
+        <!-- LLM Models Tab -->
+        <div id="llm-models" class="tab-content active">
+            <h2 class="section-title">LLM Model Configuration</h2>
+            
+            <form id="llm-model-form">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Model ID</label>
+                        <input type="text" class="form-input" name="model_id" placeholder="microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract-fulltext" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Model Name</label>
+                        <input type="text" class="form-input" name="model_name" placeholder="Microsoft BiomedNLP-PubMedBERT" required>
+                    </div>
+                </div>
+                
+                <div class="form-row-3">
+                    <div class="form-group">
+                        <label class="form-label">Deployment Type</label>
+                        <select class="form-select" name="deployment_type" required>
+                            <option value="huggingface_api">Hugging Face API</option>
+                            <option value="local_model">Local Model</option>
+                            <option value="inference_endpoint">Inference Endpoint</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Model Type</label>
+                        <select class="form-select" name="model_type" required>
+                            <option value="pubmed_bert">PubMed BERT</option>
+                            <option value="clinical_bert">Clinical BERT</option>
+                            <option value="biomedical_bert">Biomedical BERT</option>
+                            <option value="general_medical">General Medical</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Priority</label>
+                        <input type="number" class="form-input" name="priority" min="1" max="10" value="1" required>
+                    </div>
+                </div>
+                
+                <div class="form-row-3">
+                    <div class="form-group">
+                        <label class="form-label">Max Tokens</label>
+                        <input type="number" class="form-input" name="max_tokens" min="1" max="4096" value="512" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Temperature</label>
+                        <input type="number" class="form-input" name="temperature" min="0" max="2" step="0.1" value="0.1" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Confidence Threshold</label>
+                        <input type="number" class="form-input" name="confidence_threshold" min="0" max="1" step="0.01" value="0.7" required>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Timeout (seconds)</label>
+                        <input type="number" class="form-input" name="timeout_seconds" min="1" max="300" value="30" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Max Retries</label>
+                        <input type="number" class="form-input" name="max_retries" min="0" max="10" value="3" required>
+                    </div>
+                </div>
+                
+                <button type="submit" class="btn btn-primary">Create LLM Model Configuration</button>
+            </form>
+            
+            <div class="config-list" id="llm-models-list">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    Loading LLM model configurations...
+                </div>
+            </div>
+        </div>
+        
+        <!-- Decision Thresholds Tab -->
+        <div id="thresholds" class="tab-content">
+            <h2 class="section-title">Decision Threshold Configuration</h2>
+            
+            <form id="threshold-form">
+                <div class="form-group">
+                    <label class="form-label">Configuration Name</label>
+                    <input type="text" class="form-input" name="config_name" placeholder="Default Thresholds" required>
+                </div>
+                
+                <div class="form-row-3">
+                    <div class="form-group">
+                        <label class="form-label">Auto Approve Threshold</label>
+                        <input type="number" class="form-input" name="auto_approve_threshold" min="0" max="1" step="0.01" value="0.9" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Auto Deny Threshold</label>
+                        <input type="number" class="form-input" name="auto_deny_threshold" min="0" max="1" step="0.01" value="0.8" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Manual Review Threshold</label>
+                        <input type="number" class="form-input" name="manual_review_threshold" min="0" max="1" step="0.01" value="0.6" required>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">High Risk Adjustment</label>
+                        <input type="number" class="form-input" name="high_risk_adjustment" min="-1" max="1" step="0.01" value="-0.1" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Low Risk Adjustment</label>
+                        <input type="number" class="form-input" name="low_risk_adjustment" min="-1" max="1" step="0.01" value="0.05" required>
+                    </div>
+                </div>
+                
+                <button type="submit" class="btn btn-primary">Create Threshold Configuration</button>
+            </form>
+            
+            <div class="config-list" id="thresholds-list">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    Loading threshold configurations...
+                </div>
+            </div>
+        </div>
+        
+        <!-- Escalation Rules Tab -->
+        <div id="escalation" class="tab-content">
+            <h2 class="section-title">Escalation Rule Configuration</h2>
+            
+            <form id="escalation-form">
+                <div class="form-group">
+                    <label class="form-label">Rule Name</label>
+                    <input type="text" class="form-input" name="rule_name" placeholder="Low Confidence Escalation" required>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Escalation Queue</label>
+                        <input type="text" class="form-input" name="escalation_queue" placeholder="medical_review" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Priority (1=highest)</label>
+                        <input type="number" class="form-input" name="escalation_priority" min="1" max="5" value="1" required>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Timeout (hours)</label>
+                        <input type="number" class="form-input" name="escalation_timeout_hours" min="1" value="24" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Max Escalation Level</label>
+                        <input type="number" class="form-input" name="max_escalation_level" min="1" max="5" value="3" required>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Triggers (comma-separated)</label>
+                    <input type="text" class="form-input" name="triggers" placeholder="low_confidence,policy_conflict,high_cost_procedure" required>
+                </div>
+                
+                <button type="submit" class="btn btn-primary">Create Escalation Rule</button>
+            </form>
+            
+            <div class="config-list" id="escalation-list">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    Loading escalation rules...
+                </div>
+            </div>
+        </div>
+        
+        <!-- Clinical Guidelines Tab -->
+        <div id="guidelines" class="tab-content">
+            <h2 class="section-title">Clinical Guideline Configuration</h2>
+            
+            <form id="guideline-form">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Guideline Name</label>
+                        <input type="text" class="form-input" name="guideline_name" placeholder="MRI Brain Imaging Guidelines" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Version</label>
+                        <input type="text" class="form-input" name="guideline_version" value="1.0" required>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Guideline Summary</label>
+                    <textarea class="form-textarea" name="guideline_summary" placeholder="Brief summary of the guideline..." required></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Full Guideline Text</label>
+                    <textarea class="form-textarea" name="guideline_text" placeholder="Complete guideline text..." required style="min-height: 200px;"></textarea>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Applicable Procedures (CPT codes, comma-separated)</label>
+                        <input type="text" class="form-input" name="applicable_procedures" placeholder="70551,70552,70553">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Applicable Diagnoses (ICD-10 codes, comma-separated)</label>
+                        <input type="text" class="form-input" name="applicable_diagnoses" placeholder="G93.1,R51,G44.1">
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Evidence Level</label>
+                        <select class="form-select" name="evidence_level">
+                            <option value="">Select Evidence Level</option>
+                            <option value="A">A - High Quality Evidence</option>
+                            <option value="B">B - Moderate Quality Evidence</option>
+                            <option value="C">C - Low Quality Evidence</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Source Organization</label>
+                        <input type="text" class="form-input" name="source_organization" placeholder="American College of Radiology">
+                    </div>
+                </div>
+                
+                <button type="submit" class="btn btn-primary">Create Clinical Guideline</button>
+            </form>
+            
+            <div class="config-list" id="guidelines-list">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    Loading clinical guidelines...
+                </div>
+            </div>
+        </div>
+        
+        <!-- Feedback Rules Tab -->
+        <div id="feedback" class="tab-content">
+            <h2 class="section-title">Feedback Rule Configuration</h2>
+            
+            <form id="feedback-form">
+                <div class="form-group">
+                    <label class="form-label">Feedback Name</label>
+                    <input type="text" class="form-input" name="feedback_name" placeholder="Provider Decision Feedback" required>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Feedback Types (comma-separated)</label>
+                    <input type="text" class="form-input" name="feedback_types" placeholder="decision_accuracy,reasoning_quality,clinical_appropriateness" required>
+                </div>
+                
+                <div class="form-row-3">
+                    <div class="form-group">
+                        <label class="form-label">Feedback Weight</label>
+                        <input type="number" class="form-input" name="feedback_weight" min="0" max="10" step="0.1" value="1.0" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Learning Rate</label>
+                        <input type="number" class="form-input" name="learning_rate" min="0.001" max="1" step="0.001" value="0.01" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Min Feedback Count</label>
+                        <input type="number" class="form-input" name="minimum_feedback_count" min="1" value="5" required>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Feedback Decay (days)</label>
+                        <input type="number" class="form-input" name="feedback_decay_days" min="1" value="90" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Min Confidence for Learning</label>
+                        <input type="number" class="form-input" name="minimum_confidence_for_learning" min="0" max="1" step="0.01" value="0.7" required>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" name="auto_process_feedback" checked> Auto-process feedback
+                    </label>
+                </div>
+                
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" name="exclude_outliers" checked> Exclude statistical outliers
+                    </label>
+                </div>
+                
+                <button type="submit" class="btn btn-primary">Create Feedback Rule</button>
+            </form>
+            
+            <div class="config-list" id="feedback-list">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    Loading feedback rules...
+                </div>
+            </div>
+        </div>
+        
+        <!-- Performance Tab -->
+        <div id="performance" class="tab-content">
+            <h2 class="section-title">Model Performance Metrics</h2>
+            
+            <div class="metrics-grid" id="performance-metrics">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    Loading performance metrics...
+                </div>
+            </div>
+            
+            <div class="config-list" id="performance-list">
+                <!-- Performance data will be loaded here -->
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Global variables
+        let currentTab = 'llm-models';
+        const API_BASE = '/api/v1/ai-config';
+        
+        // Tab management
+        function showTab(tabName) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Remove active class from all nav tabs
+            document.querySelectorAll('.nav-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Show selected tab
+            document.getElementById(tabName).classList.add('active');
+            event.target.classList.add('active');
+            
+            currentTab = tabName;
+            
+            // Load data for the selected tab
+            loadTabData(tabName);
+        }
+        
+        // Load data for specific tab
+        async function loadTabData(tabName) {
+            try {
+                switch(tabName) {
+                    case 'llm-models':
+                        await loadLLMModels();
+                        break;
+                    case 'thresholds':
+                        await loadThresholds();
+                        break;
+                    case 'escalation':
+                        await loadEscalationRules();
+                        break;
+                    case 'guidelines':
+                        await loadGuidelines();
+                        break;
+                    case 'feedback':
+                        await loadFeedbackRules();
+                        break;
+                    case 'performance':
+                        await loadPerformanceMetrics();
+                        break;
+                }
+            } catch (error) {
+                console.error('Error loading tab data:', error);
+                showAlert('error', 'Failed to load data: ' + error.message);
+            }
+        }
+        
+        // Load LLM models
+        async function loadLLMModels() {
+            const listElement = document.getElementById('llm-models-list');
+            listElement.innerHTML = '<div class="loading"><div class="spinner"></div>Loading LLM model configurations...</div>';
+            
+            try {
+                const response = await fetch(`${API_BASE}/configurations?configuration_type=llm_model`);
+                const configs = await response.json();
+                
+                if (configs.length === 0) {
+                    listElement.innerHTML = '<p>No LLM model configurations found.</p>';
+                    return;
+                }
+                
+                listElement.innerHTML = configs.map(config => `
+                    <div class="config-item">
+                        <div class="config-header">
+                            <div>
+                                <div class="config-title">${config.configuration_data.model_name}</div>
+                                <div class="config-type">LLM Model</div>
+                            </div>
+                        </div>
+                        <div class="config-status">
+                            <span class="status-badge ${config.is_active ? 'status-active' : 'status-inactive'}">
+                                ${config.is_active ? 'Active' : 'Inactive'}
+                            </span>
+                            <span class="status-badge">Priority: ${config.configuration_data.priority}</span>
+                            <span class="status-badge">Version: ${config.version}</span>
+                        </div>
+                        <p><strong>Model ID:</strong> ${config.configuration_data.model_id}</p>
+                        <p><strong>Deployment:</strong> ${config.configuration_data.deployment_type}</p>
+                        <p><strong>Confidence Threshold:</strong> ${config.configuration_data.confidence_threshold}</p>
+                        <div class="config-actions">
+                            <button class="btn btn-secondary" onclick="editConfig('${config.config_id}')">Edit</button>
+                            <button class="btn btn-danger" onclick="deactivateConfig('${config.config_id}')">Deactivate</button>
+                        </div>
+                    </div>
+                `).join('');
+                
+            } catch (error) {
+                listElement.innerHTML = `<div class="alert alert-error">Error loading LLM models: ${error.message}</div>`;
+            }
+        }
+        
+        // Load other configuration types (similar structure)
+        async function loadThresholds() {
+            const listElement = document.getElementById('thresholds-list');
+            listElement.innerHTML = '<div class="loading"><div class="spinner"></div>Loading threshold configurations...</div>';
+            
+            try {
+                const response = await fetch(`${API_BASE}/configurations?configuration_type=decision_threshold`);
+                const configs = await response.json();
+                
+                if (configs.length === 0) {
+                    listElement.innerHTML = '<p>No threshold configurations found.</p>';
+                    return;
+                }
+                
+                listElement.innerHTML = configs.map(config => `
+                    <div class="config-item">
+                        <div class="config-header">
+                            <div>
+                                <div class="config-title">${config.configuration_data.config_name}</div>
+                                <div class="config-type">Decision Threshold</div>
+                            </div>
+                        </div>
+                        <div class="config-status">
+                            <span class="status-badge ${config.is_active ? 'status-active' : 'status-inactive'}">
+                                ${config.is_active ? 'Active' : 'Inactive'}
+                            </span>
+                            <span class="status-badge">Version: ${config.version}</span>
+                        </div>
+                        <p><strong>Auto Approve:</strong> ${config.configuration_data.auto_approve_threshold}</p>
+                        <p><strong>Auto Deny:</strong> ${config.configuration_data.auto_deny_threshold}</p>
+                        <p><strong>Manual Review:</strong> ${config.configuration_data.manual_review_threshold}</p>
+                        <div class="config-actions">
+                            <button class="btn btn-secondary" onclick="editConfig('${config.config_id}')">Edit</button>
+                            <button class="btn btn-danger" onclick="deactivateConfig('${config.config_id}')">Deactivate</button>
+                        </div>
+                    </div>
+                `).join('');
+                
+            } catch (error) {
+                listElement.innerHTML = `<div class="alert alert-error">Error loading thresholds: ${error.message}</div>`;
+            }
+        }
+        
+        // Similar functions for other configuration types...
+        async function loadEscalationRules() {
+            const listElement = document.getElementById('escalation-list');
+            listElement.innerHTML = '<div class="loading"><div class="spinner"></div>Loading escalation rules...</div>';
+            // Implementation similar to above
+        }
+        
+        async function loadGuidelines() {
+            const listElement = document.getElementById('guidelines-list');
+            listElement.innerHTML = '<div class="loading"><div class="spinner"></div>Loading clinical guidelines...</div>';
+            // Implementation similar to above
+        }
+        
+        async function loadFeedbackRules() {
+            const listElement = document.getElementById('feedback-list');
+            listElement.innerHTML = '<div class="loading"><div class="spinner"></div>Loading feedback rules...</div>';
+            // Implementation similar to above
+        }
+        
+        async function loadPerformanceMetrics() {
+            const metricsElement = document.getElementById('performance-metrics');
+            metricsElement.innerHTML = '<div class="loading"><div class="spinner"></div>Loading performance metrics...</div>';
+            // Implementation for performance metrics
+        }
+        
+        // Form submission handlers
+        document.getElementById('llm-model-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData.entries());
+            
+            // Convert numeric fields
+            data.priority = parseInt(data.priority);
+            data.max_tokens = parseInt(data.max_tokens);
+            data.temperature = parseFloat(data.temperature);
+            data.confidence_threshold = parseFloat(data.confidence_threshold);
+            data.timeout_seconds = parseInt(data.timeout_seconds);
+            data.max_retries = parseInt(data.max_retries);
+            data.enabled = true;
+            
+            try {
+                const response = await fetch(`${API_BASE}/llm-models`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data)
+                });
+                
+                if (response.ok) {
+                    showAlert('success', 'LLM model configuration created successfully!');
+                    e.target.reset();
+                    await loadLLMModels();
+                } else {
+                    const error = await response.json();
+                    showAlert('error', 'Failed to create configuration: ' + error.detail);
+                }
+            } catch (error) {
+                showAlert('error', 'Network error: ' + error.message);
+            }
+        });
+        
+        // Similar form handlers for other forms...
+        document.getElementById('threshold-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData.entries());
+            
+            // Convert numeric fields
+            data.auto_approve_threshold = parseFloat(data.auto_approve_threshold);
+            data.auto_deny_threshold = parseFloat(data.auto_deny_threshold);
+            data.manual_review_threshold = parseFloat(data.manual_review_threshold);
+            data.high_risk_adjustment = parseFloat(data.high_risk_adjustment);
+            data.low_risk_adjustment = parseFloat(data.low_risk_adjustment);
+            
+            try {
+                const response = await fetch(`${API_BASE}/decision-thresholds`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data)
+                });
+                
+                if (response.ok) {
+                    showAlert('success', 'Threshold configuration created successfully!');
+                    e.target.reset();
+                    await loadThresholds();
+                } else {
+                    const error = await response.json();
+                    showAlert('error', 'Failed to create configuration: ' + error.detail);
+                }
+            } catch (error) {
+                showAlert('error', 'Network error: ' + error.message);
+            }
+        });
+        
+        // Utility functions
+        function showAlert(type, message) {
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type}`;
+            alertDiv.textContent = message;
+            
+            // Insert at the top of the current tab
+            const currentTabElement = document.querySelector('.tab-content.active');
+            currentTabElement.insertBefore(alertDiv, currentTabElement.firstChild);
+            
+            // Remove after 5 seconds
+            setTimeout(() => {
+                alertDiv.remove();
+            }, 5000);
+        }
+        
+        async function editConfig(configId) {
+            // Implementation for editing configurations
+            showAlert('warning', 'Edit functionality coming soon!');
+        }
+        
+        async function deactivateConfig(configId) {
+            if (!confirm('Are you sure you want to deactivate this configuration?')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/configurations/${configId}`, {
+                    method: 'DELETE'
+                });
+                
+                if (response.ok) {
+                    showAlert('success', 'Configuration deactivated successfully!');
+                    await loadTabData(currentTab);
+                } else {
+                    const error = await response.json();
+                    showAlert('error', 'Failed to deactivate: ' + error.detail);
+                }
+            } catch (error) {
+                showAlert('error', 'Network error: ' + error.message);
+            }
+        }
+        
+        // Initialize the page
+        document.addEventListener('DOMContentLoaded', () => {
+            loadTabData('llm-models');
+        });
+    </script>
+</body>
+</html>

@@ -97,6 +97,18 @@ class Settings(BaseSettings):
     # Performance settings
     max_concurrent_requests: int = Field(default=1000, description="Maximum concurrent requests")
     request_timeout: int = Field(default=120, description="Request timeout in seconds")
+    
+    # LLM Integration Settings
+    huggingface_api_token: str = Field(default="", description="Hugging Face API token", alias="HUGGINGFACE_API_TOKEN")
+    huggingface_api_url: str = Field(default="https://api-inference.huggingface.co/models", description="Hugging Face API URL")
+    local_models_path: str = Field(default="./models", description="Path to local models")
+    llm_max_concurrent_requests: int = Field(default=10, description="Maximum concurrent LLM requests")
+    llm_default_timeout: int = Field(default=30, description="Default LLM timeout in seconds")
+    llm_enable_cache: bool = Field(default=True, description="Enable LLM response caching")
+    llm_cache_ttl: int = Field(default=3600, description="LLM cache TTL in seconds")
+    llm_health_check_interval: int = Field(default=300, description="LLM health check interval in seconds")
+    llm_enable_fallback: bool = Field(default=True, description="Enable LLM fallback to rule-based")
+    llm_fallback_to_rules: bool = Field(default=True, description="Fallback to rules when LLM fails")
 
 
 @lru_cache()

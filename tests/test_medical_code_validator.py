@@ -1,25 +1,23 @@
 """
-Unit tests for medical code validation engine.
+Tests for the medical code validator service.
 
-Tests comprehensive medical code validation including caching,
-external database integration, and suggestion functionality.
+This module tests medical code validation, format checking, and
+code existence verification for ICD-10, CPT, and HCPCS codes.
 """
 
 import pytest
-import asyncio
-from datetime import datetime, timezone
+from src.services.validation import ValidationResult
+from datetime import datetime, date
+from unittest.mock import Mock, patch, AsyncMock
+from typing import Dict, Any, List
 
-from src.services.medical_code_validator import (
-    MedicalCodeValidator, 
-    ValidationResult, 
-    CodeValidationResult,
-    CacheEntry
-)
-from src.models.medical_codes import ICD10Code, CPTCode, HCPCSCode
+from src.services.medical_code_validator import MedicalCodeValidator, CodeValidationResult
+from src.models.medical_codes import ICD10Code, CPTCode
+from src.models.enums import MedicalCodeType
 
 
 class TestMedicalCodeValidator:
-    """Test cases for MedicalCodeValidator."""
+    """Test medical code validator functionality."""
     
     @pytest.fixture
     def validator(self):
@@ -27,445 +25,455 @@ class TestMedicalCodeValidator:
         return MedicalCodeValidator()
     
     @pytest.mark.asyncio
-    async def test_validate_valid_icd10_codes(self, validator):
-        """Test validation of valid ICD-10 codes."""
-        valid_codes = [
-            ICD10Code(code="M25.511", description="Pain in right shoulder"),
-            ICD10Code(code="S72.001A", description="Fracture of unspecified part of neck of right femur, initial encounter"),
-            ICD10Code(code="G93.1", description="Anoxic brain damage, not elsewhere classified")
-        ]
-        
-        for code in valid_codes:
-            result = await validator.validate_icd10_code(code)
-            assert result.result == CodeValidationResult.VALID
-            assert result.code == code.code
-            assert result.description is not None
-            assert result.effective_date is not None
-    
-    @pytest.mark.asyncio
-    async def test_validate_invalid_icd10_codes(self, validator):
-        """Test validation of invalid ICD-10 codes."""
-        # Test codes that pass Pydantic validation but fail business validation
-        invalid_codes = [
-            ICD10Code(code="Z99.999", description="Non-existent code"),
-            ICD10Code(code="X99.999", description="Non-existent code")
-        ]
-        
-        for code in invalid_codes:
-            result = await validator.validate_icd10_code(code)
-            assert result.result in [CodeValidationResult.INVALID, CodeValidationResult.NOT_FOUND]
-            assert result.code == code.code
-            assert len(result.suggestions) > 0
-    
-    @pytest.mark.asyncio
-    async def test_validate_valid_cpt_codes(self, validator):
-        """Test validation of valid CPT codes."""
-        valid_codes = [
-            CPTCode(code="70551", description="MRI brain without contrast"),
-            CPTCode(code="73221", description="MRI upper extremity without contrast"),
-            CPTCode(code="72148", description="MRI lumbar spine without contrast")
-        ]
-        
-        for code in valid_codes:
-            result = await validator.validate_cpt_code(code)
-            assert result.result == CodeValidationResult.VALID
-            assert result.code == code.code
-            assert result.description is not None
-            assert result.effective_date is not None
-    
-    @pytest.mark.asyncio
-    async def test_validate_invalid_cpt_codes(self, validator):
-        """Test validation of invalid CPT codes."""
-        # Test codes that pass Pydantic validation but fail business validation
-        invalid_codes = [
-            CPTCode(code="79999", description="Non-existent code"),  # Valid format, not in database
-            CPTCode(code="70000", description="Non-existent code")   # Valid format, not in database
-        ]
-        
-        for code in invalid_codes:
-            result = await validator.validate_cpt_code(code)
-            assert result.result in [CodeValidationResult.INVALID, CodeValidationResult.NOT_FOUND]
-            assert result.code == code.code
-            assert len(result.suggestions) > 0
-    
-    @pytest.mark.asyncio
-    async def test_validate_valid_hcpcs_codes(self, validator):
-        """Test validation of valid HCPCS codes."""
-        valid_codes = [
-            HCPCSCode(code="A0425", description="Ground mileage"),
-            HCPCSCode(code="E0100", description="Cane"),
-            HCPCSCode(code="L3000", description="Foot insert")
-        ]
-        
-        for code in valid_codes:
-            result = await validator.validate_hcpcs_code(code)
-            assert result.result == CodeValidationResult.VALID
-            assert result.code == code.code
-            assert result.description is not None
-            assert result.effective_date is not None
-    
-    @pytest.mark.asyncio
-    async def test_validate_invalid_hcpcs_codes(self, validator):
-        """Test validation of invalid HCPCS codes."""
-        # Test codes that pass Pydantic validation but fail business validation
-        invalid_codes = [
-            HCPCSCode(code="Z9999", description="Non-existent code"),
-            HCPCSCode(code="X1234", description="Non-existent code")
-        ]
-        
-        for code in invalid_codes:
-            result = await validator.validate_hcpcs_code(code)
-            assert result.result in [CodeValidationResult.INVALID, CodeValidationResult.NOT_FOUND]
-            assert result.code == code.code
-            assert len(result.suggestions) > 0
 
+    
+    async def test_validate_icd10_code_valid(self, validator):
+        """Test ICD-10 code validation for valid code."""
+        with patch.object(validator, '_check_code_database') as mock_db:
+            mock_db.return_value = {
+                "valid": True,
+                "description": "Anoxic brain damage, not elsewhere classified",
+                "category": "Diseases of the nervous system"
+            }
+            
+            result = await validator.validate_code("G93.1", MedicalCodeType.ICD10)
+            
+            assert isinstance(result, CodeValidationResult)
+            assert result.is_valid is True
+            assert result.code == "G93.1"
+            assert result.code_type == MedicalCodeType.ICD10
+            assert result.description is not None
+    
+    @pytest.mark.asyncio
 
-class TestCachingFunctionality:
-    """Test cases for caching functionality."""
     
-    @pytest.fixture
-    def validator(self):
-        """Create medical code validator instance."""
-        return MedicalCodeValidator()
-    
-    @pytest.mark.asyncio
-    async def test_cache_hit_on_repeated_validation(self, validator):
-        """Test that repeated validations use cache."""
-        code = ICD10Code(code="M25.511", description="Pain in right shoulder")
+    async def test_validate_icd10_code_invalid_format(self, validator):
+        """Test ICD-10 code validation for invalid format."""
+        result = await validator.validate_code("INVALID", MedicalCodeType.ICD10)
         
-        # First validation - should be cache miss
-        result1 = await validator.validate_icd10_code(code)
-        stats1 = validator.get_cache_stats()
-        
-        # Second validation - should be cache hit
-        result2 = await validator.validate_icd10_code(code)
-        stats2 = validator.get_cache_stats()
-        
-        assert result1.result == result2.result == CodeValidationResult.VALID
-        assert stats2["cache_hits"] > stats1["cache_hits"]
-        assert stats2["cache_size"] > 0
+        assert isinstance(result, CodeValidationResult)
+        assert result.is_valid is False
+        assert "format" in result.error_message.lower()
     
     @pytest.mark.asyncio
-    async def test_batch_validation_performance(self, validator):
-        """Test batch validation performance."""
+
+    
+    async def test_validate_icd10_code_not_found(self, validator):
+        """Test ICD-10 code validation for code not found."""
+        with patch.object(validator, '_check_code_database') as mock_db:
+            mock_db.return_value = {"valid": False, "description": None}
+            
+            result = await validator.validate_code("Z99.99", MedicalCodeType.ICD10)
+            
+            assert isinstance(result, CodeValidationResult)
+            assert result.is_valid is False
+            assert "not found" in result.error_message.lower()
+    
+    @pytest.mark.asyncio
+
+    
+    async def test_validate_cpt_code_valid(self, validator):
+        """Test CPT code validation for valid code."""
+        with patch.object(validator, '_check_code_database') as mock_db:
+            mock_db.return_value = {
+                "valid": True,
+                "description": "MRI brain without contrast",
+                "category": "Radiology"
+            }
+            
+            result = await validator.validate_code("70551", MedicalCodeType.CPT)
+            
+            assert isinstance(result, CodeValidationResult)
+            assert result.is_valid is True
+            assert result.code == "70551"
+            assert result.code_type == MedicalCodeType.CPT
+            assert result.description is not None
+    
+    @pytest.mark.asyncio
+
+    
+    async def test_validate_cpt_code_invalid_format(self, validator):
+        """Test CPT code validation for invalid format."""
+        result = await validator.validate_code("123", MedicalCodeType.CPT)
+        
+        assert isinstance(result, CodeValidationResult)
+        assert result.is_valid is False
+        assert "format" in result.error_message.lower()
+    
+    @pytest.mark.asyncio
+
+    
+    async def test_validate_hcpcs_code_valid(self, validator):
+        """Test HCPCS code validation for valid code."""
+        with patch.object(validator, '_check_code_database') as mock_db:
+            mock_db.return_value = {
+                "valid": True,
+                "description": "Injection, contrast material",
+                "category": "Drugs"
+            }
+            
+            result = await validator.validate_code("A9576", MedicalCodeType.HCPCS)
+            
+            assert isinstance(result, CodeValidationResult)
+            assert result.is_valid is True
+            assert result.code == "A9576"
+            assert result.code_type == MedicalCodeType.HCPCS
+            assert result.description is not None
+    
+    @pytest.mark.asyncio
+
+    
+    async def test_batch_validate_codes(self, validator):
+        """Test batch validation of multiple codes."""
         codes = [
-            ("icd10", "M25.511"),
-            ("cpt", "70551"),
-            ("hcpcs", "A0425"),
-            ("icd10", "G93.1"),
-            ("cpt", "73221")
+            ("G93.1", MedicalCodeType.ICD10),
+            ("70551", MedicalCodeType.CPT),
+            ("A9576", MedicalCodeType.HCPCS)
         ]
         
-        results = await validator.validate_codes_batch(codes)
-        
-        assert len(results) == len(codes)
-        for code_value in [code[1] for code in codes]:
-            assert code_value in results
-            assert results[code_value].result == CodeValidationResult.VALID
-    
-    def test_cache_expiration(self, validator):
-        """Test cache entry expiration."""
-        # Create an expired cache entry
-        result = ValidationResult(
-            code="TEST123",
-            result=CodeValidationResult.VALID,
-            description="Test code"
-        )
-        
-        entry = CacheEntry(
-            result=result,
-            cached_at=datetime.now(timezone.utc),
-            ttl_seconds=0  # Immediate expiration
-        )
-        
-        assert entry.is_expired is True
-        
-        # Create a non-expired entry
-        entry_valid = CacheEntry(
-            result=result,
-            cached_at=datetime.now(timezone.utc),
-            ttl_seconds=3600  # 1 hour
-        )
-        
-        assert entry_valid.is_expired is False
-    
-    def test_cache_statistics(self, validator):
-        """Test cache statistics tracking."""
-        stats = validator.get_cache_stats()
-        
-        assert "cache_hits" in stats
-        assert "cache_misses" in stats
-        assert "external_lookups" in stats
-        assert "validation_requests" in stats
-        assert "cache_size" in stats
-        assert "frequent_cache_size" in stats
-        assert "cache_hit_rate" in stats
-        
-        assert all(isinstance(value, (int, float)) for value in stats.values())
-    
-    def test_cache_clearing(self, validator):
-        """Test cache clearing functionality."""
-        # Add something to cache first
-        validator._add_to_cache("test_key", ValidationResult(
-            code="TEST",
-            result=CodeValidationResult.VALID
-        ))
-        
-        assert validator.get_cache_stats()["cache_size"] > 0
-        
-        validator.clear_cache()
-        
-        stats = validator.get_cache_stats()
-        assert stats["cache_size"] == 0
-        assert stats["frequent_cache_size"] == 0
-
-
-class TestCodeSuggestions:
-    """Test cases for code suggestion functionality."""
-    
-    @pytest.fixture
-    def validator(self):
-        """Create medical code validator instance."""
-        return MedicalCodeValidator()
-    
-    def test_icd10_code_suggestions(self, validator):
-        """Test ICD-10 code suggestions."""
-        # Test suggestions for musculoskeletal codes
-        suggestions = validator.get_code_suggestions("M25", "icd10", limit=3)
-        assert len(suggestions) <= 3
-        assert all("M25" in suggestion for suggestion in suggestions)
-        
-        # Test suggestions for invalid input
-        suggestions = validator.get_code_suggestions("INVALID", "icd10", limit=5)
-        assert len(suggestions) > 0
-        assert all(" - " in suggestion for suggestion in suggestions)  # Format: "CODE - Description"
-    
-    def test_cpt_code_suggestions(self, validator):
-        """Test CPT code suggestions."""
-        # Test suggestions for brain MRI codes
-        suggestions = validator.get_code_suggestions("705", "cpt", limit=3)
-        assert len(suggestions) <= 3
-        assert all("705" in suggestion for suggestion in suggestions)
-        
-        # Test suggestions for invalid input
-        suggestions = validator.get_code_suggestions("99999", "cpt", limit=5)
-        assert len(suggestions) > 0
-        assert all(" - " in suggestion for suggestion in suggestions)
-    
-    def test_hcpcs_code_suggestions(self, validator):
-        """Test HCPCS code suggestions."""
-        # Test suggestions for ambulance codes
-        suggestions = validator.get_code_suggestions("A04", "hcpcs", limit=3)
-        assert len(suggestions) <= 3
-        
-        # Test suggestions for invalid input
-        suggestions = validator.get_code_suggestions("INVALID", "hcpcs", limit=5)
-        assert len(suggestions) > 0
-        assert all(" - " in suggestion for suggestion in suggestions)
-    
-    def test_invalid_code_type_suggestions(self, validator):
-        """Test suggestions for invalid code type."""
-        suggestions = validator.get_code_suggestions("12345", "invalid_type", limit=5)
-        assert len(suggestions) == 0
-
-
-class TestFormatValidation:
-    """Test cases for code format validation."""
-    
-    @pytest.fixture
-    def validator(self):
-        """Create medical code validator instance."""
-        return MedicalCodeValidator()
-    
-    def test_icd10_format_validation(self, validator):
-        """Test ICD-10 format validation."""
-        # Valid formats
-        valid_formats = ["A00", "A00.1", "A00.12", "A00.123", "A00.1234", "M25.511", "S72.001A"]
-        for code in valid_formats:
-            assert validator._validate_icd10_format(code) is True
-        
-        # Invalid formats
-        invalid_formats = ["A", "A0", "A001", "A00.", "A00.12345", "AA0.1", "A0A.1", "INVALID"]
-        for code in invalid_formats:
-            assert validator._validate_icd10_format(code) is False
-    
-    def test_cpt_format_validation(self, validator):
-        """Test CPT format validation."""
-        # Valid formats
-        valid_formats = ["70551", "73221", "12345", "99999"]
-        for code in valid_formats:
-            assert validator._validate_cpt_format(code) is True
-        
-        # Invalid formats
-        invalid_formats = ["7055", "705511", "ABCDE", "7055A", ""]
-        for code in invalid_formats:
-            assert validator._validate_cpt_format(code) is False
-    
-    def test_hcpcs_format_validation(self, validator):
-        """Test HCPCS format validation."""
-        # Valid formats
-        valid_formats = ["A0425", "E0100", "L3000", "Z1234"]
-        for code in valid_formats:
-            assert validator._validate_hcpcs_format(code) is True
-        
-        # Invalid formats
-        invalid_formats = ["A042", "A04255", "0425", "AA425", "INVALID", ""]
-        for code in invalid_formats:
-            assert validator._validate_hcpcs_format(code) is False
-
-
-class TestExternalDatabaseIntegration:
-    """Test cases for external database integration simulation."""
-    
-    @pytest.fixture
-    def validator(self):
-        """Create medical code validator instance."""
-        return MedicalCodeValidator()
+        with patch.object(validator, '_check_code_database') as mock_db:
+            mock_db.return_value = {"valid": True, "description": "Valid code"}
+            
+            results = await validator.batch_validate_codes(codes)
+            
+            assert isinstance(results, list)
+            assert len(results) == 3
+            assert all(isinstance(result, CodeValidationResult) for result in results)
+            assert all(result.is_valid for result in results)
     
     @pytest.mark.asyncio
-    async def test_external_lookup_simulation(self, validator):
-        """Test external database lookup simulation."""
-        # Test ICD-10 lookup
-        code = ICD10Code(code="M25.511", description="Pain in right shoulder")
-        result = await validator._lookup_icd10_external(code)
-        
-        assert result.result == CodeValidationResult.VALID
-        assert result.description is not None
-        assert result.effective_date is not None
-        
-        # Test non-existent code
-        invalid_code = ICD10Code(code="Z99.999", description="Non-existent")
-        result = await validator._lookup_icd10_external(invalid_code)
-        
-        assert result.result == CodeValidationResult.NOT_FOUND
-        assert len(result.suggestions) > 0
-    
-    @pytest.mark.asyncio
-    async def test_external_lookup_statistics(self, validator):
-        """Test that external lookups are tracked in statistics."""
-        initial_stats = validator.get_cache_stats()
-        initial_lookups = initial_stats["external_lookups"]
-        
-        # Perform validation that should trigger external lookup
-        code = ICD10Code(code="M25.511", description="Pain in right shoulder")
-        await validator.validate_icd10_code(code)
-        
-        final_stats = validator.get_cache_stats()
-        assert final_stats["external_lookups"] > initial_lookups
-    
-    @pytest.mark.asyncio
-    async def test_network_delay_simulation(self, validator):
-        """Test that external lookups include simulated network delay."""
-        import time
-        
-        start_time = time.time()
-        
-        code = CPTCode(code="70551", description="MRI brain without contrast")
-        await validator._lookup_cpt_external(code)
-        
-        end_time = time.time()
-        elapsed = end_time - start_time
-        
-        # Should have at least 0.01 seconds delay (simulated network call)
-        assert elapsed >= 0.01
-
-
-class TestPerformanceAndScalability:
-    """Test cases for performance and scalability."""
-    
-    @pytest.fixture
-    def validator(self):
-        """Create medical code validator instance."""
-        return MedicalCodeValidator()
-    
-    @pytest.mark.asyncio
-    async def test_concurrent_validations(self, validator):
-        """Test concurrent validation requests."""
+    async def test_batch_validate_codes_mixed_results(self, validator):
+        """Test batch validation with mixed valid/invalid codes."""
         codes = [
-            ICD10Code(code="M25.511", description="Pain in right shoulder"),
-            CPTCode(code="70551", description="MRI brain without contrast"),
-            HCPCSCode(code="A0425", description="Ground mileage"),
-            ICD10Code(code="G93.1", description="Anoxic brain damage"),
-            CPTCode(code="73221", description="MRI upper extremity without contrast")
+            ("G93.1", MedicalCodeType.ICD10),  # Valid
+            ("INVALID", MedicalCodeType.ICD10),  # Invalid format
+            ("70551", MedicalCodeType.CPT)  # Valid
         ]
         
-        # Run validations concurrently
-        tasks = []
-        for code in codes:
-            if isinstance(code, ICD10Code):
-                tasks.append(validator.validate_icd10_code(code))
-            elif isinstance(code, CPTCode):
-                tasks.append(validator.validate_cpt_code(code))
-            elif isinstance(code, HCPCSCode):
-                tasks.append(validator.validate_hcpcs_code(code))
+        def mock_db_side_effect(code, code_type):
+            if code == "G93.1" or code == "70551":
+                return {"valid": True, "description": "Valid code"}
+            return {"valid": False, "description": None}
         
-        results = await asyncio.gather(*tasks)
-        
-        assert len(results) == len(codes)
-        assert all(result.result == CodeValidationResult.VALID for result in results)
+        with patch.object(validator, '_check_code_database', side_effect=mock_db_side_effect):
+            results = await validator.batch_validate_codes(codes)
+            
+            assert isinstance(results, list)
+            assert len(results) == 3
+            assert results[0].is_valid is True  # G93.1
+            assert results[1].is_valid is False  # INVALID
+            assert results[2].is_valid is True  # 70551
     
-    @pytest.mark.asyncio
-    async def test_large_batch_validation(self, validator):
-        """Test validation of large batch of codes."""
-        # Create a batch of unique codes to avoid deduplication
-        batch_codes = [
-            ("icd10", "M25.511"),
-            ("icd10", "M25.512"), 
-            ("icd10", "G93.1"),
-            ("cpt", "70551"),
-            ("cpt", "70552"),
-            ("cpt", "73221"),
-            ("hcpcs", "A0425"),
-            ("hcpcs", "E0100"),
-            ("hcpcs", "L3000")
+    def test_validate_icd10_format_valid_codes(self, validator):
+        """Test ICD-10 format validation for valid codes."""
+        valid_codes = [
+            "G93.1",
+            "M79.3",
+            "Z00.00",
+            "S72.001A",
+            "T36.0X1A"
         ]
         
-        results = await validator.validate_codes_batch(batch_codes)
-        
-        assert len(results) == len(batch_codes)
-        
-        # All should be valid
-        for result in results.values():
-            assert result.result == CodeValidationResult.VALID
-        
-        # Check cache effectiveness after running multiple times
-        for _ in range(5):
-            await validator.validate_codes_batch(batch_codes)
-        
-        stats = validator.get_cache_stats()
-        assert stats["cache_hit_rate"] > 0.5  # Should have good cache hit rate
+        for code in valid_codes:
+            result = validator._validate_icd10_format(code)
+            assert result is True, f"Code {code} should be valid"
     
-    def test_frequent_cache_lru_behavior(self, validator):
-        """Test LRU behavior of frequent cache."""
-        # Fill up the frequent cache beyond its limit
-        max_size = validator._frequent_cache_max_size
+    def test_validate_icd10_format_invalid_codes(self, validator):
+        """Test ICD-10 format validation for invalid codes."""
+        invalid_codes = [
+            "INVALID",
+            "123",
+            "G93",
+            "G93.1.2",
+            "G93.1A.B",
+            ""
+        ]
         
-        for i in range(max_size + 10):
-            cache_key = f"test_key_{i}"
-            result = ValidationResult(code=f"TEST{i}", result=CodeValidationResult.VALID)
-            entry = CacheEntry(result=result, cached_at=datetime.now(timezone.utc))
-            validator._add_to_frequent_cache(cache_key, entry)
+        for code in invalid_codes:
+            result = validator._validate_icd10_format(code)
+            assert result is False, f"Code {code} should be invalid"
+    
+    def test_validate_cpt_format_valid_codes(self, validator):
+        """Test CPT format validation for valid codes."""
+        valid_codes = [
+            "70551",
+            "99213",
+            "12345",
+            "00100"
+        ]
         
-        # Frequent cache should not exceed max size
-        assert len(validator._frequent_cache) <= max_size
+        for code in valid_codes:
+            result = validator._validate_cpt_format(code)
+            assert result is True, f"Code {code} should be valid"
+    
+    def test_validate_cpt_format_invalid_codes(self, validator):
+        """Test CPT format validation for invalid codes."""
+        invalid_codes = [
+            "INVALID",
+            "123",
+            "123456",
+            "7055A",
+            ""
+        ]
+        
+        for code in invalid_codes:
+            result = validator._validate_cpt_format(code)
+            assert result is False, f"Code {code} should be invalid"
+    
+    def test_validate_hcpcs_format_valid_codes(self, validator):
+        """Test HCPCS format validation for valid codes."""
+        valid_codes = [
+            "A9576",
+            "J1234",
+            "L5678",
+            "Q9999"
+        ]
+        
+        for code in valid_codes:
+            result = validator._validate_hcpcs_format(code)
+            assert result is True, f"Code {code} should be valid"
+    
+    def test_validate_hcpcs_format_invalid_codes(self, validator):
+        """Test HCPCS format validation for invalid codes."""
+        invalid_codes = [
+            "INVALID",
+            "12345",
+            "A123",
+            "A12345",
+            ""
+        ]
+        
+        for code in invalid_codes:
+            result = validator._validate_hcpcs_format(code)
+            assert result is False, f"Code {code} should be invalid"
     
     @pytest.mark.asyncio
-    async def test_validation_performance_benchmark(self, validator):
-        """Test validation performance benchmark."""
-        import time
+
+    
+    async def test_check_code_database_found(self, validator):
+        """Test database code lookup for existing code."""
+        with patch.object(validator, 'code_repository') as mock_repo:
+            mock_repo.get_code_info.return_value = {
+                "code": "G93.1",
+                "description": "Anoxic brain damage",
+                "category": "Nervous system",
+                "is_active": True
+            }
+            
+            result = await validator._check_code_database("G93.1", MedicalCodeType.ICD10)
+            
+            assert result["valid"] is True
+            assert result["description"] == "Anoxic brain damage"
+            assert result["category"] == "Nervous system"
+    
+    @pytest.mark.asyncio
+
+    
+    async def test_check_code_database_not_found(self, validator):
+        """Test database code lookup for non-existing code."""
+        with patch.object(validator, 'code_repository') as mock_repo:
+            mock_repo.get_code_info.return_value = None
+            
+            result = await validator._check_code_database("INVALID", MedicalCodeType.ICD10)
+            
+            assert result["valid"] is False
+            assert result["description"] is None
+    
+    @pytest.mark.asyncio
+
+    
+    async def test_check_code_database_inactive(self, validator):
+        """Test database code lookup for inactive code."""
+        with patch.object(validator, 'code_repository') as mock_repo:
+            mock_repo.get_code_info.return_value = {
+                "code": "G93.1",
+                "description": "Anoxic brain damage",
+                "category": "Nervous system",
+                "is_active": False
+            }
+            
+            result = await validator._check_code_database("G93.1", MedicalCodeType.ICD10)
+            
+            assert result["valid"] is False
+            assert "inactive" in result.get("reason", "").lower()
+    
+    @pytest.mark.asyncio
+
+    
+    async def test_get_code_suggestions_similar_codes(self, validator):
+        """Test getting code suggestions for similar codes."""
+        with patch.object(validator, 'code_repository') as mock_repo:
+            mock_repo.find_similar_codes.return_value = [
+                {"code": "G93.1", "description": "Anoxic brain damage", "similarity": 0.9},
+                {"code": "G93.2", "description": "Other brain damage", "similarity": 0.8}
+            ]
+            
+            suggestions = await validator.get_code_suggestions("G93", MedicalCodeType.ICD10)
+            
+            assert isinstance(suggestions, list)
+            assert len(suggestions) == 2
+            assert suggestions[0]["code"] == "G93.1"
+            assert suggestions[0]["similarity"] == 0.9
+    
+    @pytest.mark.asyncio
+
+    
+    async def test_get_code_suggestions_no_matches(self, validator):
+        """Test getting code suggestions when no similar codes found."""
+        with patch.object(validator, 'code_repository') as mock_repo:
+            mock_repo.find_similar_codes.return_value = []
+            
+            suggestions = await validator.get_code_suggestions("INVALID", MedicalCodeType.ICD10)
+            
+            assert isinstance(suggestions, list)
+            assert len(suggestions) == 0
+    
+    @pytest.mark.asyncio
+
+    
+    async def test_validate_code_with_caching(self, validator):
+        """Test code validation with caching."""
+        with patch.object(validator, 'cache') as mock_cache, \
+             patch.object(validator, '_check_code_database') as mock_db:
+            
+            # First call - cache miss
+            mock_cache.get.return_value = None
+            mock_db.return_value = {"valid": True, "description": "Valid code"}
+            
+            result1 = await validator.validate_code("G93.1", MedicalCodeType.ICD10)
+            
+            # Verify cache was checked and set
+            mock_cache.get.assert_called_once()
+            mock_cache.set.assert_called_once()
+            
+            # Second call - cache hit
+            mock_cache.get.return_value = result1
+            result2 = await validator.validate_code("G93.1", MedicalCodeType.ICD10)
+            
+            assert result1.code == result2.code
+            assert result1.is_valid == result2.is_valid
+    
+    @pytest.mark.asyncio
+
+    
+    async def test_validate_code_with_version_check(self, validator):
+        """Test code validation with version checking."""
+        with patch.object(validator, '_check_code_version') as mock_version, \
+             patch.object(validator, '_check_code_database') as mock_db:
+            
+            mock_version.return_value = {"current": True, "effective_date": "2024-01-01"}
+            mock_db.return_value = {"valid": True, "description": "Valid code"}
+            
+            result = await validator.validate_code("G93.1", MedicalCodeType.ICD10, check_version=True)
+            
+            assert result.is_valid is True
+            mock_version.assert_called_once_with("G93.1", MedicalCodeType.ICD10)
+    
+    @pytest.mark.asyncio
+
+    
+    async def test_validate_code_outdated_version(self, validator):
+        """Test code validation with outdated version."""
+        with patch.object(validator, '_check_code_version') as mock_version, \
+             patch.object(validator, '_check_code_database') as mock_db:
+            
+            mock_version.return_value = {"current": False, "effective_date": "2020-01-01"}
+            mock_db.return_value = {"valid": True, "description": "Valid code"}
+            
+            result = await validator.validate_code("G93.1", MedicalCodeType.ICD10, check_version=True)
+            
+            assert result.is_valid is False
+            assert "outdated" in result.error_message.lower()
+    
+    def test_normalize_code_icd10(self, validator):
+        """Test code normalization for ICD-10 codes."""
+        test_cases = [
+            ("g93.1", "G93.1"),
+            ("G93.1", "G93.1"),
+            ("g93.1a", "G93.1A"),
+            ("G93.1A", "G93.1A")
+        ]
         
-        code = ICD10Code(code="M25.511", description="Pain in right shoulder")
+        for input_code, expected in test_cases:
+            result = validator._normalize_code(input_code, MedicalCodeType.ICD10)
+            assert result == expected
+    
+    def test_normalize_code_cpt(self, validator):
+        """Test code normalization for CPT codes."""
+        test_cases = [
+            ("70551", "70551"),
+            ("7055", "07055"),  # Pad with leading zero
+            ("99213", "99213")
+        ]
         
-        # Warm up cache
-        await validator.validate_icd10_code(code)
+        for input_code, expected in test_cases:
+            result = validator._normalize_code(input_code, MedicalCodeType.CPT)
+            assert result == expected
+    
+    def test_normalize_code_hcpcs(self, validator):
+        """Test code normalization for HCPCS codes."""
+        test_cases = [
+            ("a9576", "A9576"),
+            ("A9576", "A9576"),
+            ("j1234", "J1234")
+        ]
         
-        # Benchmark cached validation
-        start_time = time.time()
-        for _ in range(100):
-            await validator.validate_icd10_code(code)
-        end_time = time.time()
+        for input_code, expected in test_cases:
+            result = validator._normalize_code(input_code, MedicalCodeType.HCPCS)
+            assert result == expected
+
+
+class TestCodeValidationResult:
+    """Test CodeValidationResult model."""
+    
+    def test_validation_result_valid(self):
+        """Test CodeValidationResult for valid code."""
+        result = CodeValidationResult(
+            code="G93.1",
+            code_type=MedicalCodeType.ICD10,
+            is_valid=True,
+            description="Anoxic brain damage",
+            category="Nervous system"
+        )
         
-        avg_time = (end_time - start_time) / 100
+        assert result.code == "G93.1"
+        assert result.code_type == MedicalCodeType.ICD10
+        assert result.is_valid is True
+        assert result.description == "Anoxic brain damage"
+        assert result.error_message is None
+    
+    def test_validation_result_invalid(self):
+        """Test CodeValidationResult for invalid code."""
+        result = CodeValidationResult(
+            code="INVALID",
+            code_type=MedicalCodeType.ICD10,
+            is_valid=False,
+            error_message="Invalid code format"
+        )
         
-        # Cached validations should be very fast (< 1ms each)
-        assert avg_time < 0.001
+        assert result.code == "INVALID"
+        assert result.code_type == MedicalCodeType.ICD10
+        assert result.is_valid is False
+        assert result.error_message == "Invalid code format"
+        assert result.description is None
+    
+    def test_validation_result_serialization(self):
+        """Test CodeValidationResult serialization."""
+        result = CodeValidationResult(
+            code="G93.1",
+            code_type=MedicalCodeType.ICD10,
+            is_valid=True,
+            description="Anoxic brain damage"
+        )
+        
+        serialized = result.dict()
+        
+        assert isinstance(serialized, dict)
+        assert serialized["code"] == "G93.1"
+        assert serialized["code_type"] == MedicalCodeType.ICD10
+        assert serialized["is_valid"] is True
+        assert serialized["description"] == "Anoxic brain damage"
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

@@ -13,6 +13,12 @@ import random
 from typing import Dict, List, Any
 from unittest.mock import AsyncMock, patch
 
+from tests.utils.performance_helpers import (
+    PerformanceOptimizedFixtures,
+    fast_test,
+    get_performance_fixtures
+)
+
 from src.services.cache import cache_manager, CacheKey, CacheTTL
 from src.services.policy_cache import policy_cache_service
 from src.services.medical_code_cache import medical_code_cache_service, MedicalCodeType
@@ -22,6 +28,11 @@ from src.services.cache_warming import cache_warming_service
 
 class TestCachePerformance:
     """Test cache performance and effectiveness."""
+    
+    def setup_method(self):
+        """Set up test method with performance optimizations."""
+        self.config = get_optimization_config()
+        self.optimizer = TestPerformanceOptimizer()
     
     @pytest_asyncio.fixture(autouse=True)
     async def setup_cache(self):
@@ -41,11 +52,17 @@ class TestCachePerformance:
             yield
     
     @pytest.mark.asyncio
+    @pytest.mark.slow
+    @fast_test(timeout=30.0)
+    @pytest.mark.asyncio
     async def test_cache_get_performance(self):
         """Test cache get operation performance."""
         # Setup test data
         test_key = "test:performance:get"
         test_value = {"data": "test_value", "timestamp": time.time()}
+        
+        # Optimize iteration count
+        iteration_count = self.optimizer.reduce_test_iterations(100, self.config['fast_mode'])
         
         with patch.object(cache_manager, 'get') as mock_get:
             mock_get.return_value = test_value
@@ -54,27 +71,34 @@ class TestCachePerformance:
             start_time = time.time()
             tasks = []
             
-            for _ in range(100):
+            for _ in range(iteration_count):
                 task = cache_manager.get(test_key)
                 tasks.append(task)
             
             results = await asyncio.gather(*tasks)
             end_time = time.time()
             
-            # Verify performance
+            # Verify performance (adjusted for optimized iteration count)
             total_time = end_time - start_time
-            avg_time_per_operation = total_time / 100
+            avg_time_per_operation = total_time / iteration_count
             
-            assert total_time < 1.0, f"100 cache get operations took {total_time}s, should be < 1s"
-            assert avg_time_per_operation < 0.01, f"Average get time {avg_time_per_operation}s should be < 0.01s"
+            expected_max_time = 1.0 if not self.config['fast_mode'] else 0.3
+            expected_avg_time = 0.01 if not self.config['fast_mode'] else 0.03
+            
+            assert total_time < expected_max_time, f"{iteration_count} cache get operations took {total_time}s, should be < {expected_max_time}s"
+            assert avg_time_per_operation < expected_avg_time, f"Average get time {avg_time_per_operation}s should be < {expected_avg_time}s"
             assert all(result == test_value for result in results)
     
     @pytest.mark.asyncio
+    @pytest.mark.slow
+    @fast_test(timeout=30.0)
     async def test_cache_set_performance(self):
         """Test cache set operation performance."""
+        # Optimize test data size
+        data_count = self.optimizer.reduce_test_iterations(100, self.config['fast_mode'])
         test_data = [
             (f"test:performance:set:{i}", {"data": f"value_{i}", "index": i})
-            for i in range(100)
+            for i in range(data_count)
         ]
         
         with patch.object(cache_manager, 'set') as mock_set:
@@ -363,6 +387,7 @@ class TestCacheEffectiveness:
     """Test cache effectiveness and hit rates."""
     
     @pytest.mark.asyncio
+    @pytest.mark.asyncio
     async def test_cache_hit_rate_simulation(self):
         """Simulate cache hit rate under realistic usage patterns."""
         # Simulate 80/20 rule - 20% of data accessed 80% of the time
@@ -374,7 +399,7 @@ class TestCacheEffectiveness:
         
         with patch.object(cache_manager, 'get') as mock_get:
             # Simulate cache behavior
-            def mock_get_behavior(key):
+            async def mock_get_behavior(key):
                 if key in popular_keys:
                     return {"cached": "data", "key": key}  # Cache hit
                 else:

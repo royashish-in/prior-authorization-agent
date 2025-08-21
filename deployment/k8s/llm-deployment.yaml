@@ -1,0 +1,120 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: llm-service
+  namespace: prior-auth
+  labels:
+    app: llm-service
+    component: ai-engine
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: llm-service
+  template:
+    metadata:
+      labels:
+        app: llm-service
+        component: ai-engine
+    spec:
+      containers:
+      - name: llm-service
+        image: prior-auth/llm-service:latest
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        - name: CUDA_VISIBLE_DEVICES
+          value: "0"
+        - name: HUGGINGFACE_HUB_CACHE
+          value: "/app/cache/huggingface"
+        - name: TRANSFORMERS_CACHE
+          value: "/app/cache/transformers"
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: llm-secrets
+              key: redis-url
+        - name: MODEL_CACHE_SIZE
+          value: "4GB"
+        resources:
+          requests:
+            memory: "8Gi"
+            cpu: "2"
+            nvidia.com/gpu: 1
+          limits:
+            memory: "16Gi"
+            cpu: "4"
+            nvidia.com/gpu: 1
+        volumeMounts:
+        - name: model-cache
+          mountPath: /app/cache
+        - name: tmp-volume
+          mountPath: /tmp
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 120
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8080
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 10
+          failureThreshold: 12
+      volumes:
+      - name: model-cache
+        persistentVolumeClaim:
+          claimName: llm-model-cache
+      - name: tmp-volume
+        emptyDir:
+          sizeLimit: 2Gi
+      nodeSelector:
+        accelerator: nvidia-tesla-v100
+      tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: llm-service
+  namespace: prior-auth
+  labels:
+    app: llm-service
+spec:
+  selector:
+    app: llm-service
+  ports:
+  - port: 80
+    targetPort: 8080
+    protocol: TCP
+    name: http
+  type: ClusterIP
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: llm-model-cache
+  namespace: prior-auth
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 50Gi
+  storageClassName: fast-ssd

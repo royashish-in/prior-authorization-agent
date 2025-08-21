@@ -1,0 +1,104 @@
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: llm-service-vs
+  namespace: prior-auth
+spec:
+  hosts:
+  - llm-service
+  http:
+  - match:
+    - uri:
+        prefix: /v1/models
+    route:
+    - destination:
+        host: llm-service
+        port:
+          number: 80
+    timeout: 120s
+    retries:
+      attempts: 3
+      perTryTimeout: 40s
+      retryOn: 5xx,reset,connect-failure,refused-stream
+  - match:
+    - uri:
+        prefix: /health
+    route:
+    - destination:
+        host: llm-service
+        port:
+          number: 80
+    timeout: 10s
+  - route:
+    - destination:
+        host: llm-service
+        port:
+          number: 80
+    timeout: 60s
+---
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: llm-service-dr
+  namespace: prior-auth
+spec:
+  host: llm-service
+  trafficPolicy:
+    connectionPool:
+      tcp:
+        maxConnections: 100
+      http:
+        http1MaxPendingRequests: 50
+        http2MaxRequests: 100
+        maxRequestsPerConnection: 10
+        maxRetries: 3
+        consecutiveGatewayErrors: 5
+        interval: 30s
+        baseEjectionTime: 30s
+        maxEjectionPercent: 50
+    loadBalancer:
+      simple: LEAST_CONN
+    outlierDetection:
+      consecutiveGatewayErrors: 3
+      consecutive5xxErrors: 3
+      interval: 30s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+      minHealthPercent: 50
+---
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: llm-service-pa
+  namespace: prior-auth
+spec:
+  selector:
+    matchLabels:
+      app: llm-service
+  mtls:
+    mode: STRICT
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: llm-service-authz
+  namespace: prior-auth
+spec:
+  selector:
+    matchLabels:
+      app: llm-service
+  rules:
+  - from:
+    - source:
+        principals: ["cluster.local/ns/prior-auth/sa/decision-engine"]
+    to:
+    - operation:
+        methods: ["POST"]
+        paths: ["/v1/models/*"]
+  - from:
+    - source:
+        principals: ["cluster.local/ns/istio-system/sa/istio-proxy"]
+    to:
+    - operation:
+        methods: ["GET"]
+        paths: ["/health", "/ready", "/metrics"]

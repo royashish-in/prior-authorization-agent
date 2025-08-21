@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 import httpx
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from src.core.config import get_settings
 from src.core.logging import get_logger
@@ -45,6 +45,31 @@ class CMSGuidelinesResponse(BaseModel):
     compliance_issues: List[str]
     recommendations: List[str]
     confidence_score: float
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "ncd_policies": [
+                    {
+                        "policy_id": "NCD_220.2",
+                        "policy_name": "Magnetic Resonance Imaging",
+                        "coverage_criteria": ["Medical necessity established"]
+                    }
+                ],
+                "lcd_policies": [
+                    {
+                        "policy_id": "LCD_L33721",
+                        "policy_name": "MRI Brain",
+                        "coverage_criteria": ["Neurological symptoms present"]
+                    }
+                ],
+                "is_compliant": True,
+                "compliance_issues": [],
+                "recommendations": ["Ensure medical necessity is documented"],
+                "confidence_score": 0.9
+            }
+        }
+    )
 
 
 class MedicalCodeValidationResponse(BaseModel):
@@ -56,6 +81,20 @@ class MedicalCodeValidationResponse(BaseModel):
     suggestions: List[str]
     effective_date: Optional[datetime]
     expiration_date: Optional[datetime]
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "code": "70551",
+                "is_valid": True,
+                "description": "MRI brain without contrast",
+                "code_type": "CPT",
+                "suggestions": [],
+                "effective_date": "2024-01-01T00:00:00Z",
+                "expiration_date": None
+            }
+        }
+    )
 
 
 class PolicyServiceResponse(BaseModel):
@@ -68,6 +107,27 @@ class PolicyServiceResponse(BaseModel):
     policy_references: List[str]
     additional_requirements: List[str]
     conflicts: List[Dict[str, Any]]
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "policy_id": "POLICY_PAYER_001",
+                "is_covered": True,
+                "policy_type": "PAYER",
+                "reasoning": [
+                    "Procedure covered under standard benefits",
+                    "Diagnosis supports medical necessity"
+                ],
+                "confidence_score": 0.85,
+                "policy_references": ["PAYER_POLICY_MRI"],
+                "additional_requirements": [
+                    "Prior authorization required",
+                    "Network provider preferred"
+                ],
+                "conflicts": []
+            }
+        }
+    )
 
 
 class ExternalServiceIntegrator:

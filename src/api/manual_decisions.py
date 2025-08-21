@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException, status, Depends
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 from src.auth.oauth2 import get_current_user
 from src.auth.models import TokenData, UserRole
@@ -27,6 +27,18 @@ class ManualDecisionRequest(BaseModel):
     reasoning: str = Field(..., min_length=20, description="Detailed reasoning for the decision")
     policy_references: Optional[List[str]] = Field(default=[], description="Referenced policies")
     additional_notes: Optional[str] = Field(None, description="Additional notes or requirements")
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "request_id": "req_2024_001234",
+                "decision": "approved",
+                "reasoning": "Patient meets medical necessity criteria for shoulder MRI based on documented symptoms and failed conservative treatment",
+                "policy_references": ["CMS_NCD_220.2", "PAYER_POLICY_MRI_001"],
+                "additional_notes": "Authorization valid for 30 days"
+            }
+        }
+    )
 
 
 class ManualDecisionResponse(BaseModel):
@@ -39,6 +51,21 @@ class ManualDecisionResponse(BaseModel):
     decided_at: datetime
     authorization_number: Optional[str] = None
     valid_until: Optional[datetime] = None
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "decision_id": "dec_manual_1706097000",
+                "request_id": "req_2024_001234",
+                "decision": "approved",
+                "reasoning": "Patient meets medical necessity criteria for shoulder MRI based on documented symptoms and failed conservative treatment",
+                "decision_maker": "admin_user",
+                "decided_at": "2024-01-24T10:30:00Z",
+                "authorization_number": "AUTH_req_2024_001234_1706097000",
+                "valid_until": "2024-02-23T10:30:00Z"
+            }
+        }
+    )
 
 
 def require_decision_maker_role(current_user: dict = Depends(get_current_user)) -> dict:
