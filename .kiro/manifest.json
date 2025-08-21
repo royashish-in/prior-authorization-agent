@@ -1,0 +1,42 @@
+{
+  "kiroVersion": "1.0",
+  "projectManifest": {
+    "kiroCode": "KIRO-nExH-N2Sm",
+    "projectName": "Prior Authorization Agent",
+    "projectId": "prior-authorization-agent",
+    "version": "1.0.0",
+    "description": "Intelligent healthcare automation system for prior authorization requests",
+    "author": "Healthcare AI Team",
+    "license": "MIT",
+    "repository": "https://github.com/royashish-in/prior-authorization-agent.git",
+    "homepage": "https://github.com/royashish-in/prior-authorization-agent",
+    "keywords": ["healthcare", "prior-authorization", "ai", "automation", "hipaa"],
+    "environment": "development",
+    "created": "2025-01-14T00:00:00Z",
+    "lastModified": "2025-01-14T12:00:00Z"
+  },
+  "kiroIntegration": {
+    "specs": [
+      "prior-authorization-agent",
+      "llm-enhanced-decision-engine", 
+      "coverage-30-percent",
+      "coverage-improvement-35-percent",
+      "coverage-improvement-50-percent",
+      "test-suite-improvements",
+      "test-suite-final-fixes"
+    ],
+    "hooks": [
+      "healthcare-automation-hook"
+    ],
+    "mcpServers": [
+      "fetch",
+      "git"
+    ]
+  },
+  "buildInfo": {
+    "builtWithKiro": true,
+    "kiroAccessEnabled": true,
+    "complianceValidated": true,
+    "automationEnabled": true
+  }
+}
